@@ -40,13 +40,10 @@ jobs:
           echo "tags=${TAGS}" >> "${GITHUB_OUTPUT}"
           echo "magento_version=${MAGENTO_VERSION}" >> "${GITHUB_OUTPUT}"
 
-      - name: Create Docker config for GHCR
+      - name: Create Docker config for Kaniko
         run: |
-          DOCKER_CONFIG_DIR="${RUNNER_TEMP}/docker-config"
-          mkdir -p "${DOCKER_CONFIG_DIR}"
-          echo "{\"auths\":{\"${REGISTRY}\":{\"auth\":\"$(echo -n "${GITHUB_ACTOR}:${GITHUB_TOKEN}" | base64 -w0)\"}}}" > "${DOCKER_CONFIG_DIR}/config.json"
-          chmod 600 "${DOCKER_CONFIG_DIR}/config.json"
-          echo "DOCKER_CONFIG_DIR=${DOCKER_CONFIG_DIR}" >> "${GITHUB_ENV}"
+          mkdir -p /tmp/kaniko/.docker
+          echo "{\"auths\":{\"ghcr.io\":{\"auth\":\"$(echo -n "${{ github.actor }}:${{ secrets.GITHUB_TOKEN }}" | base64 | tr -d '\n')\"}}}" > /tmp/kaniko/.docker/config.json
 
       - name: Build and push with Kaniko
         shell: bash
@@ -59,8 +56,7 @@ jobs:
 
           docker run --rm \
             -v "${GITHUB_WORKSPACE}:/workspace" \
-            -v "${DOCKER_CONFIG_DIR}:/kaniko/.docker" \
-            -e DOCKER_CONFIG=/kaniko/.docker \
+            -v /tmp/kaniko/.docker/config.json:/kaniko/.docker/config.json:ro \
             gcr.io/kaniko-project/executor:latest \
             --context=/workspace/magento \
             --dockerfile=Dockerfile \
