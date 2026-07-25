@@ -41,7 +41,7 @@ wait_for_tcp() {
   exec 3>&- 3<&- || true
 }
 
-wait_for_tcp "$MAGENTO_DB_HOST" "$MAGENTO_DB_PORT" "MySQL"
+wait_for_tcp "$MAGENTO_DB_HOST" "$MAGENTO_DB_PORT" "MariaDB"
 wait_for_tcp "$MAGENTO_OPENSEARCH_HOST" "$MAGENTO_OPENSEARCH_PORT" "OpenSearch"
 
 # Not a plain file-existence check: setup:di:compile (run at build time) writes

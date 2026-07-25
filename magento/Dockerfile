@@ -11,7 +11,7 @@ SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
         git unzip zip curl \
-        default-mysql-client \
+        default-mariadb-client \
         libzip-dev libicu-dev libxslt1-dev libonig-dev libxml2-dev \
         libfreetype6-dev libjpeg62-turbo-dev libpng-dev libsodium-dev \
         libcurl4-openssl-dev \

@@ -94,18 +94,16 @@ docker compose logs -f magento
 Then hit `http://localhost:8080/`. Admin panel is at
 `http://localhost:8080/<MAGENTO_BACKEND_FRONTNAME>` (default `admin`).
 
-### MySQL and OpenSearch requirements found by actually running this
+### MariaDB and OpenSearch requirements found by actually running this
 
 Both surfaced as real failures during testing, not theoretical — already
 applied in `docker-compose.yml` here, but carry them into whatever actually
 provisions these two services elsewhere (e.g. the k8s manifests this image
 eventually runs under):
 
-- **MySQL needs `log_bin_trust_function_creators = 1`** (or the connecting
-  user needs `SUPER`). `setup:install` creates triggers on core tables
-  (e.g. `customer_entity`), and MySQL 8 refuses non-`SUPER` users the right
-  to do that while binary logging is on: `SQLSTATE[HY000]: General error:
-  1419 You do not have the SUPER privilege...`.
+- **MariaDB 12.3** is used as the database (recommended by Adobe for
+  Magento 2.4.9). Unlike MySQL 8, MariaDB does not require the
+  `log_bin_trust_function_creators` workaround for trigger creation.
 - **OpenSearch 2.12+ requires `OPENSEARCH_INITIAL_ADMIN_PASSWORD`** to be set
   even with `plugins.security.disabled=true` — the security plugin's demo
   installer checks for it before OpenSearch itself even starts, regardless
@@ -118,7 +116,7 @@ eventually runs under):
   with `crontab` populated by `bin/magento cron:install`, sharing the same
   `app/code` and DB.
 - No Redis — cache/session/full-page-cache all default to the filesystem
-  and MySQL. Fine for a single replica; add Redis and the corresponding
+  and MariaDB. Fine for a single replica; add Redis and the corresponding
   `env.php` cache backends before scaling to more than one pod.
 - Everything in the container runs as `root` (nginx master + php-fpm master
   both start as root, workers drop to `www-data`) — standard for a dev

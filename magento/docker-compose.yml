@@ -1,20 +1,15 @@
 services:
-  mysql:
-    image: mysql:8.0
-    # setup:install creates triggers on core tables, and MySQL 8 refuses
-    # that to non-SUPER users while binary logging is on without this —
-    # verified live: fails partway through with "You do not have the SUPER
-    # privilege and binary logging is enabled".
-    command: --log-bin-trust-function-creators=1
+  mariadb:
+    image: mariadb:12.3
     environment:
-      MYSQL_ROOT_PASSWORD: CHANGEME
-      MYSQL_DATABASE: magento
-      MYSQL_USER: magento
-      MYSQL_PASSWORD: CHANGEME
+      MARIADB_ROOT_PASSWORD: CHANGEME
+      MARIADB_DATABASE: magento
+      MARIADB_USER: magento
+      MARIADB_PASSWORD: CHANGEME
     volumes:
-      - mysql-data:/var/lib/mysql
+      - mariadb-data:/var/lib/mysql
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-pCHANGEME"]
+      test: ["CMD", "mariadb-admin", "ping", "-h", "localhost", "-u", "root", "-pCHANGEME"]
       interval: 5s
       timeout: 5s
       retries: 20
@@ -39,13 +34,13 @@ services:
   magento:
     build: .
     depends_on:
-      mysql:
+      mariadb:
         condition: service_healthy
       opensearch:
         condition: service_healthy
     environment:
       MAGENTO_BASE_URL: http://localhost:8080/
-      MAGENTO_DB_HOST: mysql
+      MAGENTO_DB_HOST: mariadb
       MAGENTO_DB_NAME: magento
       MAGENTO_DB_USER: magento
       MAGENTO_DB_PASSWORD: CHANGEME
@@ -66,7 +61,7 @@ services:
       - magento-static:/var/www/html/pub/static
 
 volumes:
-  mysql-data:
+  mariadb-data:
   opensearch-data:
   magento-etc:
   magento-media:
