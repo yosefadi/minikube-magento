@@ -42,8 +42,11 @@ jobs:
 
       - name: Create Docker config for GHCR
         run: |
-          mkdir -p "${HOME}/.docker"
-          echo "{\"auths\":{\"${REGISTRY}\":{\"auth\":\"$(echo -n "${GITHUB_ACTOR}:${GITHUB_TOKEN}" | base64 -w0)\"}}}" > "${HOME}/.docker/config.json"
+          DOCKER_CONFIG_DIR="${RUNNER_TEMP}/docker-config"
+          mkdir -p "${DOCKER_CONFIG_DIR}"
+          echo "{\"auths\":{\"${REGISTRY}\":{\"auth\":\"$(echo -n "${GITHUB_ACTOR}:${GITHUB_TOKEN}" | base64 -w0)\"}}}" > "${DOCKER_CONFIG_DIR}/config.json"
+          chmod 600 "${DOCKER_CONFIG_DIR}/config.json"
+          echo "DOCKER_CONFIG_DIR=${DOCKER_CONFIG_DIR}" >> "${GITHUB_ENV}"
 
       - name: Build and push with Kaniko
         shell: bash
@@ -56,7 +59,8 @@ jobs:
 
           docker run --rm \
             -v "${GITHUB_WORKSPACE}:/workspace" \
-            -v "${HOME}/.docker:/kaniko/.docker" \
+            -v "${DOCKER_CONFIG_DIR}:/kaniko/.docker" \
+            -e DOCKER_CONFIG=/kaniko/.docker \
             gcr.io/kaniko-project/executor:latest \
             --context=/workspace/magento \
             --dockerfile=Dockerfile \
