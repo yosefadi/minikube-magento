@@ -1,0 +1,67 @@
+name: Build Magento Image
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}/magento
+
+jobs:
+  build:
+    runs-on: self-hosted
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Extract metadata
+        id: meta
+        shell: bash
+        run: |
+          MAGENTO_VERSION=$(grep '^ARG MAGENTO_VERSION=' magento/Dockerfile | cut -d'=' -f2)
+          SHORT_SHA="${GITHUB_SHA::7}"
+
+          TAGS="${REGISTRY}/${IMAGE_NAME}:${MAGENTO_VERSION}-${SHORT_SHA}"
+
+          if [[ "${GITHUB_REF}" == "refs/heads/main" ]]; then
+            TAGS="${TAGS},${REGISTRY}/${IMAGE_NAME}:latest"
+          fi
+
+          if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
+            TAGS="${TAGS},${REGISTRY}/${IMAGE_NAME}:${MAGENTO_VERSION}"
+          fi
+
+          echo "tags=${TAGS}" >> "${GITHUB_OUTPUT}"
+          echo "magento_version=${MAGENTO_VERSION}" >> "${GITHUB_OUTPUT}"
+
+      - name: Create Docker config for GHCR
+        run: |
+          mkdir -p /kaniko/.docker
+          echo "{\"auths\":{\"${REGISTRY}\":{\"auth\":\"$(echo -n "${GITHUB_ACTOR}:${GITHUB_TOKEN}" | base64 -w0)\"}}}" > /kaniko/.docker/config.json
+
+      - name: Build and push with Kaniko
+        shell: bash
+        run: |
+          IFS=',' read -ra TAGS_ARRAY <<< "${{ steps.meta.outputs.tags }}"
+          DEST_FLAGS=()
+          for tag in "${TAGS_ARRAY[@]}"; do
+            DEST_FLAGS+=("--destination=${tag}")
+          done
+
+          docker run --rm \
+            -v "${GITHUB_WORKSPACE}:/workspace" \
+            -v "/kaniko/.docker:/kaniko/.docker" \
+            gcr.io/kaniko-project/executor:latest \
+            --context=/workspace/magento \
+            --dockerfile=Dockerfile \
+            "${DEST_FLAGS[@]}" \
+            --cache=true \
+            --cache-repository="${REGISTRY}/${IMAGE_NAME}/cache" \
+            --compressed \
+            --verbosity=info
