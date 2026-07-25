@@ -1,0 +1,73 @@
+services:
+  mysql:
+    image: mysql:8.0
+    # setup:install creates triggers on core tables, and MySQL 8 refuses
+    # that to non-SUPER users while binary logging is on without this —
+    # verified live: fails partway through with "You do not have the SUPER
+    # privilege and binary logging is enabled".
+    command: --log-bin-trust-function-creators=1
+    environment:
+      MYSQL_ROOT_PASSWORD: CHANGEME
+      MYSQL_DATABASE: magento
+      MYSQL_USER: magento
+      MYSQL_PASSWORD: CHANGEME
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-pCHANGEME"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  opensearch:
+    image: opensearchproject/opensearch:2
+    environment:
+      discovery.type: single-node
+      plugins.security.disabled: "true"
+      # Required since OpenSearch 2.12+ even with security disabled — the
+      # demo installer checks for this before OpenSearch itself starts.
+      OPENSEARCH_INITIAL_ADMIN_PASSWORD: "CHANGEME"
+      OPENSEARCH_JAVA_OPTS: "-Xms512m -Xmx512m"
+    volumes:
+      - opensearch-data:/usr/share/opensearch/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:9200/_cluster/health || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  magento:
+    build: .
+    depends_on:
+      mysql:
+        condition: service_healthy
+      opensearch:
+        condition: service_healthy
+    environment:
+      MAGENTO_BASE_URL: http://localhost:8080/
+      MAGENTO_DB_HOST: mysql
+      MAGENTO_DB_NAME: magento
+      MAGENTO_DB_USER: magento
+      MAGENTO_DB_PASSWORD: CHANGEME
+      MAGENTO_OPENSEARCH_HOST: opensearch
+      MAGENTO_ADMIN_EMAIL: admin@example.com
+      MAGENTO_ADMIN_PASSWORD: CHANGEME
+    ports:
+      - "8080:8080"
+    volumes:
+      # Without this, every container restart re-runs the full installer
+      # against a database that already has tables and fails — see the
+      # entrypoint's env.php check.
+      - magento-etc:/var/www/html/app/etc
+      - magento-media:/var/www/html/pub/media
+      # Without this, static content gets redeployed on every restart —
+      # harmless but slow (the entrypoint checks for it independently of
+      # env.php, since they're separate volumes and either can be missing).
+      - magento-static:/var/www/html/pub/static
+
+volumes:
+  mysql-data:
+  opensearch-data:
+  magento-etc:
+  magento-media:
+  magento-static:
