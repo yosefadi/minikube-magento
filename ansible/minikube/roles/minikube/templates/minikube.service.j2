@@ -1,0 +1,23 @@
+# {{ ansible_managed }}
+[Unit]
+Description=Minikube single-node Kubernetes cluster
+Documentation=https://minikube.sigs.k8s.io/docs/
+After=docker.service network-online.target
+Requires=docker.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+User={{ minikube_user }}
+Group={{ minikube_user }}
+Environment=HOME={{ minikube_home }}
+Environment=MINIKUBE_HOME={{ minikube_home }}/.minikube
+Environment=MINIKUBE_IN_STYLE=false
+WorkingDirectory={{ minikube_home }}
+ExecStart={{ minikube_bin }} start {{ minikube_start_flags | trim }}
+ExecStop={{ minikube_bin }} stop
+TimeoutStartSec={{ minikube_start_timeout }}
+
+[Install]
+WantedBy=multi-user.target

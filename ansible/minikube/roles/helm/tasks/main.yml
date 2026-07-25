@@ -1,0 +1,55 @@
+---
+# Helm comes from the official tarball rather than the baltocdn apt repository:
+# that repo is deprecated upstream, and a network that intercepts baltocdn.com
+# will happily hand apt a bogus signing key. Its leftovers are cleaned up by
+# the common role's `common_retired_apt_files`.
+- name: Install and manage Helm
+  when: helm_install | bool
+  block:
+    - name: Check the installed Helm version
+      ansible.builtin.command: "{{ helm_bin_dir }}/helm version --short --template '{{ '{{' }} .Version {{ '}}' }}'"
+      register: helm_installed
+      changed_when: false
+      failed_when: false
+
+    - name: Resolve the latest Helm version
+      ansible.builtin.uri:
+        url: https://get.helm.sh/helm-latest-version
+        return_content: true
+      register: helm_latest
+      when: helm_version == 'latest'
+      changed_when: false
+
+    - name: Set the target Helm version
+      ansible.builtin.set_fact:
+        helm_target_version: >-
+          {{ (helm_latest.content | trim) if helm_version == 'latest' else helm_version }}
+
+    - name: Install Helm
+      when: helm_target_version not in (helm_installed.stdout | default(''))
+      block:
+        - name: Download the Helm tarball
+          ansible.builtin.get_url:
+            url: "https://get.helm.sh/helm-{{ helm_target_version }}-linux-{{ helm_arch }}.tar.gz"
+            dest: "/tmp/helm-{{ helm_target_version }}-linux-{{ helm_arch }}.tar.gz"
+            checksum: "sha256:https://get.helm.sh/helm-{{ helm_target_version }}-linux-{{ helm_arch }}.tar.gz.sha256sum"
+            mode: "0644"
+          register: helm_tarball
+
+        - name: Unpack the Helm binary
+          ansible.builtin.unarchive:
+            src: "{{ helm_tarball.dest }}"
+            dest: "{{ helm_bin_dir }}"
+            remote_src: true
+            include:
+              - "linux-{{ helm_arch }}/helm"
+            extra_opts:
+              - --strip-components=1
+            owner: root
+            group: root
+            mode: "0755"
+
+        - name: Remove the Helm tarball
+          ansible.builtin.file:
+            path: "{{ helm_tarball.dest }}"
+            state: absent

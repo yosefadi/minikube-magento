@@ -1,0 +1,67 @@
+---
+- name: Remove distro-packaged Docker variants
+  ansible.builtin.apt:
+    name:
+      - docker.io
+      - docker-doc
+      - docker-compose
+      - podman-docker
+      - containerd
+      - runc
+    state: absent
+
+- name: Install the Docker apt signing key
+  ansible.builtin.get_url:
+    url: https://download.docker.com/linux/ubuntu/gpg
+    dest: /etc/apt/keyrings/docker.asc
+    mode: "0644"
+
+- name: Verify the Docker GPG key fingerprint
+  ansible.builtin.command:
+    argv:
+      - gpg
+      - --show-keys
+      - --keyid-format=long
+      - --fingerprint
+      - /etc/apt/keyrings/docker.asc
+  register: docker_gpg_verify
+  changed_when: false
+  failed_when: >
+    '9DC8 5822 9FC7 DD38 854A  E2D8 8D81 803C 0EBF CD88' not in
+    docker_gpg_verify.stdout
+
+- name: Configure the Docker apt repository
+  ansible.builtin.deb822_repository:
+    name: docker
+    types: [deb]
+    uris: "https://download.docker.com/linux/ubuntu"
+    suites: ["{{ ansible_facts['distribution_release'] }}"]
+    components: [stable]
+    architectures: ["{{ docker_apt_arch }}"]
+    signed_by: /etc/apt/keyrings/docker.asc
+    state: present
+    enabled: true
+
+- name: Install Docker Engine
+  ansible.builtin.apt:
+    update_cache: true
+    name: >-
+      {{ docker_packages
+         | map('regex_replace', '$', '=' ~ docker_version)
+         | list
+         if docker_version != 'latest' else docker_packages }}
+    state: present
+
+- name: Write /etc/docker/daemon.json
+  ansible.builtin.copy:
+    content: "{{ docker_daemon_options | to_nice_json }}\n"
+    dest: /etc/docker/daemon.json
+    mode: "0644"
+  notify: Restart docker
+
+- name: Ensure Docker is enabled and running
+  ansible.builtin.systemd_service:
+    name: docker
+    state: started
+    enabled: true
+    daemon_reload: true

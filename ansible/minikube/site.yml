@@ -1,0 +1,30 @@
+---
+- name: Install and configure Minikube on Ubuntu 24.04
+  hosts: minikube
+  become: true
+  gather_facts: true
+
+  pre_tasks:
+    - name: Verify the target is Ubuntu 24.04
+      ansible.builtin.assert:
+        that:
+          - ansible_facts['distribution'] == "Ubuntu"
+          - ansible_facts['distribution_version'] is version("24.04", ">=")
+        fail_msg: >-
+          This playbook targets Ubuntu 24.04+, found
+          {{ ansible_facts['distribution'] }} {{ ansible_facts['distribution_version'] }}.
+        quiet: true
+
+  roles:
+    - role: common
+      tags: [common]
+    - role: docker
+      tags: [docker]
+    - role: kubectl
+      tags: [kubectl]
+    - role: helm
+      tags: [helm]
+    - role: k9s
+      tags: [k9s]
+    - role: minikube
+      tags: [minikube]

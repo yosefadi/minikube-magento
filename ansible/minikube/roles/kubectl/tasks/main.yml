@@ -1,0 +1,60 @@
+---
+- name: Install the Kubernetes apt signing key
+  ansible.builtin.get_url:
+    url: "https://pkgs.k8s.io/core:/stable:/{{ kubectl_apt_channel }}/deb/Release.key"
+    dest: /etc/apt/keyrings/kubernetes-apt-keyring.asc
+    mode: "0644"
+
+- name: Configure the Kubernetes apt repository
+  ansible.builtin.deb822_repository:
+    name: kubernetes
+    types: [deb]
+    uris: "https://pkgs.k8s.io/core:/stable:/{{ kubectl_apt_channel }}/deb/"
+    suites: ["/"]
+    signed_by: /etc/apt/keyrings/kubernetes-apt-keyring.asc
+    state: present
+    enabled: true
+
+- name: Refresh the apt cache for the current channel
+  ansible.builtin.apt:
+    update_cache: true
+  changed_when: false
+
+- name: Determine the newest kubectl version in this apt channel
+  ansible.builtin.command: apt-cache policy kubectl
+  register: kubectl_apt_policy
+  changed_when: false
+
+- name: Check the currently installed kubectl version
+  ansible.builtin.command: dpkg-query -W -f='${Version}' kubectl
+  register: kubectl_installed_version
+  changed_when: false
+  failed_when: false
+
+- name: Install and pin kubectl to the current channel's version
+  # Runs only when kubectl_apt_channel actually moved the candidate forward —
+  # otherwise unholding/re-holding on every run would report "changed" forever
+  # even though nothing is actually different.
+  when: kubectl_candidate_version not in (kubectl_installed_version.stdout | default(''))
+  vars:
+    kubectl_candidate_version: "{{ kubectl_apt_policy.stdout | regex_search('Candidate: (\\S+)', '\\1') | first }}"
+  block:
+    - name: Release any existing kubectl version hold
+      # Otherwise a channel bump (kubectl_apt_channel) can't move an
+      # already-installed kubectl forward — apt just sees it as "present" and
+      # leaves it alone, silently stranding it on the old minor version.
+      ansible.builtin.dpkg_selections:
+        name: kubectl
+        selection: install
+
+    - name: Install kubectl
+      ansible.builtin.apt:
+        name: "kubectl={{ kubectl_candidate_version }}"
+        state: present
+
+    - name: Hold the kubectl package at the installed version
+      # Ansible remains the only thing that moves this version — the hold
+      # just blocks unattended-upgrades / a stray `apt upgrade` from doing it.
+      ansible.builtin.dpkg_selections:
+        name: kubectl
+        selection: hold

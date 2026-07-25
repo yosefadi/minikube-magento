@@ -1,0 +1,21 @@
+---
+minikube_arch: "{{ 'arm64' if ansible_facts['architecture'] == 'aarch64' else 'amd64' }}"
+minikube_bin: /usr/local/bin/minikube
+minikube_home: "/home/{{ minikube_user }}"
+
+minikube_start_flags: >-
+  {{ (
+    ['--driver=' ~ minikube_driver,
+     '--kubernetes-version=' ~ minikube_kubernetes_version,
+     '--cpus=' ~ minikube_cpus,
+     '--memory=' ~ minikube_memory,
+     '--disk-size=' ~ minikube_disk_size,
+     '--nodes=' ~ minikube_nodes,
+     '--apiserver-port=' ~ minikube_apiserver_port,
+     '--embed-certs',
+     '--interactive=false']
+    + (['--listen-address=' ~ minikube_listen_address,
+        '--apiserver-ips=' ~ minikube_remote_access_host]
+       if minikube_expose_apiserver | bool else [])
+    + minikube_extra_args
+    ) | join(' ') }}

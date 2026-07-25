@@ -1,0 +1,22 @@
+---
+common_base_packages:
+  - acl
+  - apt-transport-https
+  - ca-certificates
+  - conntrack
+  - curl
+  - gnupg
+  - jq
+  - socat
+  - iptables
+  - unzip
+
+common_disable_swap: true
+
+# Repository definitions this playbook no longer manages. A single unusable
+# .sources entry makes every later apt task fail, so they are cleared before
+# the first cache refresh.
+common_retired_apt_files:
+  - /etc/apt/sources.list.d/helm.sources
+  - /etc/apt/sources.list.d/helm.list
+  - /etc/apt/keyrings/helm.asc

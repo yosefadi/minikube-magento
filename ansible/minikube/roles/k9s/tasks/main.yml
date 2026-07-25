@@ -1,0 +1,46 @@
+---
+# https://github.com/derailed/k9s releases — installed from the official .deb
+# asset with its published checksum, not a third-party apt repo.
+- name: Install and manage k9s
+  when: k9s_install | bool
+  block:
+    - name: Check the installed k9s version
+      ansible.builtin.command: "{{ k9s_bin_dir }}/k9s version --short"
+      register: k9s_installed
+      changed_when: false
+      failed_when: false
+
+    - name: Resolve the latest k9s version
+      ansible.builtin.uri:
+        url: https://api.github.com/repos/derailed/k9s/releases/latest
+        return_content: true
+      register: k9s_latest
+      when: k9s_version == 'latest'
+      changed_when: false
+
+    - name: Set the target k9s version
+      ansible.builtin.set_fact:
+        k9s_target_version: >-
+          {{ (k9s_latest.json.tag_name) if k9s_version == 'latest' else k9s_version }}
+
+    - name: Install k9s
+      when: k9s_target_version not in (k9s_installed.stdout | default(''))
+      block:
+        - name: Download the k9s .deb package
+          ansible.builtin.get_url:
+            url: >-
+              https://github.com/derailed/k9s/releases/download/{{ k9s_target_version }}/k9s_linux_{{ k9s_arch }}.deb
+            dest: "/tmp/k9s_{{ k9s_target_version }}_linux_{{ k9s_arch }}.deb"
+            checksum: >-
+              sha256:https://github.com/derailed/k9s/releases/download/{{ k9s_target_version }}/checksums.sha256
+            mode: "0644"
+          register: k9s_deb
+
+        - name: Install the k9s package
+          ansible.builtin.apt:
+            deb: "{{ k9s_deb.dest }}"
+
+        - name: Remove the k9s .deb package
+          ansible.builtin.file:
+            path: "{{ k9s_deb.dest }}"
+            state: absent

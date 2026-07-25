@@ -1,0 +1,27 @@
+---
+- name: Tear the Minikube cluster down
+  hosts: minikube
+  become: true
+  gather_facts: false
+
+  tasks:
+    - name: Stop and disable the minikube unit
+      ansible.builtin.systemd_service:
+        name: minikube
+        state: stopped
+        enabled: false
+      failed_when: false
+
+    - name: Delete all minikube profiles
+      ansible.builtin.command: /usr/local/bin/minikube delete --all --purge
+      become: true
+      # This play doesn't run the minikube role, so its default for
+      # minikube_user isn't loaded here — fall back to the same literal the
+      # role defaults to, but still honor a real override from group_vars.
+      become_user: "{{ minikube_user | default('minikube') }}"
+      environment:
+        HOME: "/home/{{ minikube_user | default('minikube') }}"
+        MINIKUBE_HOME: "/home/{{ minikube_user | default('minikube') }}/.minikube"
+        MINIKUBE_IN_STYLE: "false"
+      changed_when: true
+      failed_when: false

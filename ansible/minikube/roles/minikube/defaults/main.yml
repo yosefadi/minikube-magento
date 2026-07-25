@@ -1,0 +1,38 @@
+---
+minikube_version: latest
+minikube_kubernetes_version: "v1.36.3"
+minikube_driver: docker
+minikube_user: minikube
+minikube_cpus: 2
+minikube_memory: 4096
+minikube_disk_size: 30g
+minikube_nodes: 1
+minikube_addons:
+  - default-storageclass
+  - storage-provisioner
+minikube_extra_args: []
+
+# Set to false to install the binary + unit without bringing a cluster up
+# (e.g. when baking an image).
+minikube_start_cluster: true
+minikube_share_kubeconfig_with_root: true
+minikube_start_timeout: 900
+
+minikube_apiserver_port: 8443
+
+# Off by default: this publishes the Kubernetes API server on every interface
+# instead of just 127.0.0.1, and bakes the given IP into the server cert's
+# SAN list. Only turn it on for hosts you're fine exposing the API server on
+# (cloud firewall / security group still applies on top of this).
+minikube_expose_apiserver: false
+minikube_listen_address: "0.0.0.0"
+minikube_remote_access_host: "{{ ansible_host }}"
+
+# Name of the currently loaded inventory directory (e.g. "demo", "testing"),
+# used to keep each environment's exported kubeconfig separate.
+minikube_env_name: "{{ inventory_dir | basename }}"
+
+# Off by default. Only meaningful when common_disable_swap is false (swap
+# actually present on the host) — see roles/minikube/tasks/main.yml for what
+# this does and why it can't be done through minikube's own CLI flags.
+minikube_enable_limited_swap: false

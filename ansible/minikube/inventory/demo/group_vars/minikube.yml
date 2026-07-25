@@ -1,0 +1,32 @@
+---
+# KEEP THIS FILE BYTE-IDENTICAL (aside from this header) to
+# inventory/testing/group_vars/minikube.yml. Testing exists to rehearse
+# exactly what demo will get, so every value below must match its sibling
+# file exactly — if you change one, change the other in the same edit.
+#
+# Sized for a host with ~3.9-4.0 GiB RAM / 2 vCPUs / enough disk for 50g (both
+# the demo Linode box and the testing Hyper-V VM were confirmed to fit this).
+# The role default of minikube_memory: 4096 would exceed this host's real
+# ~3915 MB total and hit minikube's MK_USAGE preflight hard-fail — this is
+# the fix for that, not just parity for its own sake.
+minikube_cpus: 2
+minikube_memory: 2800
+minikube_disk_size: 50g
+minikube_extra_args:
+  - --force
+
+# Leave swap on and have Kubernetes actually manage it (KEP-2400) instead of
+# either the unmanaged fallback minikube uses by default, or disabling it.
+common_disable_swap: false
+minikube_enable_limited_swap: true
+
+minikube_addons:
+  - default-storageclass
+  - storage-provisioner
+  - ingress
+  - metrics-server
+
+# Enabled deliberately on both — for demo, this is config-only until a
+# Cloud Firewall / security group check happens; do not run this playbook
+# against the demo Linode host while this is true without doing that check.
+minikube_expose_apiserver: true

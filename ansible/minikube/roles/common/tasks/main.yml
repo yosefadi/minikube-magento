@@ -1,0 +1,56 @@
+---
+- name: Remove retired apt repository definitions
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop: "{{ common_retired_apt_files }}"
+
+- name: Update apt cache
+  ansible.builtin.apt:
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Install base packages
+  ansible.builtin.apt:
+    name: "{{ common_base_packages }}"
+    state: present
+
+- name: Ensure the apt keyring directory exists
+  ansible.builtin.file:
+    path: /etc/apt/keyrings
+    state: directory
+    mode: "0755"
+
+- name: Check for active swap devices
+  ansible.builtin.command: swapon --noheadings --show=NAME
+  register: common_active_swap
+  changed_when: false
+
+- name: Manage swap state to match common_disable_swap
+  block:
+    - name: Turn off all swap
+      ansible.builtin.command: swapoff -a
+      when: common_disable_swap | bool and common_active_swap.stdout | trim | length > 0
+      changed_when: true
+
+    - name: Comment out swap entries in /etc/fstab
+      ansible.builtin.replace:
+        path: /etc/fstab
+        regexp: '^([^#].*\s+swap\s+.*)$'
+        replace: '# \1'
+      when: common_disable_swap | bool
+
+    # Mirror image of the two tasks above, for when common_disable_swap flips
+    # back to false on a host that was previously disabled — otherwise swap
+    # stays off forever since nothing else would ever turn it back on.
+    - name: Uncomment swap entries in /etc/fstab
+      ansible.builtin.replace:
+        path: /etc/fstab
+        regexp: '^#\s?([^#].*\s+swap\s+.*)$'
+        replace: '\1'
+      when: not (common_disable_swap | bool)
+
+    - name: Turn on all swap
+      ansible.builtin.command: swapon -a
+      when: not (common_disable_swap | bool) and common_active_swap.stdout | trim | length == 0
+      changed_when: true

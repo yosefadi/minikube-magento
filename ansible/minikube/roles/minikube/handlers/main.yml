@@ -1,0 +1,6 @@
+---
+- name: Restart minikube
+  ansible.builtin.systemd_service:
+    name: minikube
+    state: restarted
+    daemon_reload: true

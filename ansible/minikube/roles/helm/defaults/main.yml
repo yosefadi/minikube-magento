@@ -1,0 +1,7 @@
+---
+helm_install: true
+
+# "latest" resolves via https://get.helm.sh/helm-latest-version, or pin a tag
+# such as "v3.16.3".
+helm_version: latest
+helm_bin_dir: /usr/local/bin

@@ -1,0 +1,2 @@
+---
+kubectl_apt_channel: "v1.36"

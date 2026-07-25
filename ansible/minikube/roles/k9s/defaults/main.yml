@@ -1,0 +1,8 @@
+---
+k9s_install: true
+
+# "latest" resolves via the GitHub API, or pin a tag such as "v0.50.6".
+k9s_version: latest
+
+# Where the .deb package puts the binary — not configurable, apt owns this path.
+k9s_bin_dir: /usr/bin
