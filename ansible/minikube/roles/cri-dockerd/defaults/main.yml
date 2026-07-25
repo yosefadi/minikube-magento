@@ -1,0 +1,4 @@
+---
+cri_dockerd_version: latest
+cri_dockerd_bin: /usr/local/bin/cri-dockerd
+cri_dockerd_socket: /run/cri-dockerd.sock

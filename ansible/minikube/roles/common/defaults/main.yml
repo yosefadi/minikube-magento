@@ -4,6 +4,8 @@ common_base_packages:
   - apt-transport-https
   - ca-certificates
   - conntrack
+  - containernetworking-plugins
+  - cri-tools
   - curl
   - gnupg
   - jq

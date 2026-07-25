@@ -15,6 +15,25 @@
     name: "{{ common_base_packages }}"
     state: present
 
+- name: Ensure /opt/cni/bin exists for minikube's none driver
+  ansible.builtin.file:
+    path: /opt/cni/bin
+    state: directory
+    mode: "0755"
+
+- name: Find installed CNI plugins
+  ansible.builtin.find:
+    paths: /usr/lib/cni
+    file_type: file
+  register: common_cni_plugins
+
+- name: Link CNI plugins to /opt/cni/bin for minikube's none driver
+  ansible.builtin.file:
+    src: "{{ item.path }}"
+    dest: "/opt/cni/bin/{{ item.path | basename }}"
+    state: link
+  loop: "{{ common_cni_plugins.files }}"
+
 - name: Ensure the apt keyring directory exists
   ansible.builtin.file:
     path: /etc/apt/keyrings

@@ -1,7 +1,7 @@
 ---
 minikube_arch: "{{ 'arm64' if ansible_facts['architecture'] == 'aarch64' else 'amd64' }}"
 minikube_bin: /usr/local/bin/minikube
-minikube_home: "/home/{{ minikube_user }}"
+minikube_home: "/root"
 
 minikube_start_flags: >-
   {{ (

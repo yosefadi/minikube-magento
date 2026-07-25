@@ -1,8 +1,9 @@
 ---
-# KEEP THIS FILE BYTE-IDENTICAL (aside from this header) to
-# inventory/testing/group_vars/minikube.yml. Testing exists to rehearse
-# exactly what demo will get, so every value below must match its sibling
-# file exactly — if you change one, change the other in the same edit.
+# Keep this file's values matching inventory/testing/group_vars/minikube.yml
+# as closely as possible (aside from this header) — testing exists to
+# rehearse what demo will get. The one deliberate exception is
+# minikube_driver: testing pins --driver=none while demo stays on the role
+# default (docker), so don't "fix" that divergence back to parity.
 #
 # Sized for a host with ~3.9-4.0 GiB RAM / 2 vCPUs / enough disk for 50g (both
 # the demo Linode box and the testing Hyper-V VM were confirmed to fit this).

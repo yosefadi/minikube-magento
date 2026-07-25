@@ -1,0 +1,13 @@
+# {{ ansible_managed }}
+[Unit]
+Description=CRI Docker Socket for the API
+Documentation=https://github.com/Mirantis/cri-dockerd
+
+[Socket]
+ListenStream=/var/run/cri-dockerd.sock
+SocketMode=0660
+SocketUser=root
+SocketGroup=root
+
+[Install]
+WantedBy=sockets.target

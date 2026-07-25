@@ -1,27 +1,20 @@
 ---
-- name: Create the minikube service account
-  ansible.builtin.user:
-    name: "{{ minikube_user }}"
-    home: "{{ minikube_home }}"
-    shell: /bin/bash
-    groups: docker
-    append: true
-    create_home: true
-    state: present
+- name: Ensure containerd is enabled and running
+  ansible.builtin.systemd_service:
+    name: containerd
+    state: started
+    enabled: true
 
 - name: Create minikube state directories
   ansible.builtin.file:
     path: "{{ item }}"
     state: directory
-    owner: "{{ minikube_user }}"
-    group: "{{ minikube_user }}"
+    owner: root
+    group: root
     mode: "0750"
   loop:
     - "{{ minikube_home }}/.minikube"
     - "{{ minikube_home }}/.kube"
-    # Pre-created so the tasks that become the minikube user do not have to
-    # invent their own remote_tmp.
-    - "{{ minikube_home }}/.ansible/tmp"
 
 - name: Check the installed minikube version
   ansible.builtin.command: "{{ minikube_bin }} version --short"
@@ -36,14 +29,16 @@
   register: minikube_latest
   when: minikube_version == 'latest'
   changed_when: false
+  failed_when: false
 
 - name: Set the target minikube version
   ansible.builtin.set_fact:
     minikube_target_version: >-
-      {{ (minikube_latest.json.tag_name) if minikube_version == 'latest' else minikube_version }}
+      {{ (minikube_latest.json.tag_name | default(minikube_version))
+         if minikube_version == 'latest' else minikube_version }}
 
 - name: Install the minikube binary
-  when: minikube_target_version not in (minikube_installed.stdout | default(''))
+  when: minikube_target_version not in (minikube_installed.stdout | default('')) and minikube_target_version != minikube_version
   ansible.builtin.get_url:
     url: >-
       https://storage.googleapis.com/minikube/releases/{{ minikube_target_version }}/minikube-linux-{{ minikube_arch }}
@@ -59,6 +54,9 @@
     dest: /etc/systemd/system/minikube.service
     mode: "0644"
   notify: Restart minikube
+
+- name: Flush pending restart handlers before starting the cluster
+  ansible.builtin.meta: flush_handlers
 
 - name: Enable and start the minikube cluster
   ansible.builtin.systemd_service:
@@ -77,11 +75,8 @@
 - name: Wait for the control-plane node to become Ready
   ansible.builtin.command: >-
     kubectl wait --for=condition=Ready nodes --all --timeout=300s
-  become: true
-  become_user: "{{ minikube_user }}"
   environment:
-    HOME: "{{ minikube_home }}"
-    MINIKUBE_HOME: "{{ minikube_home }}/.minikube"
+    KUBECONFIG: "{{ minikube_home }}/.kube/config"
   changed_when: false
 
 - name: Enforce the node container's CPU limit
@@ -91,8 +86,10 @@
   # HostConfig.NanoCpus at 0 / cgroup cpu.max at "max" (unlimited) despite
   # requesting minikube_cpus, while --memory *was* correctly enforced as a
   # real cgroup limit. `docker update --cpus` applies live, no restart
-  # needed, so this just re-asserts it after every start.
-  when: minikube_cpus is number
+  # needed, so this just re-asserts it after every start. Docker-driver only
+  # — --driver=none runs kubelet on the host directly, so there's no
+  # "minikube" container to inspect/limit.
+  when: minikube_driver == 'docker' and minikube_cpus is number
   block:
     - name: Check the node container's current CPU limit
       ansible.builtin.command:
@@ -109,90 +106,68 @@
 - name: Enable managed LimitedSwap kubelet behavior
   when: minikube_enable_limited_swap | bool
   block:
-    # minikube always hardcodes `failSwapOn: false` into the generated
-    # KubeletConfiguration, which is what lets kubelet start at all with swap
-    # present — but that's the old, unmanaged way of tolerating swap. Real
-    # Kubernetes swap support (KEP-2400) needs the `NodeSwap` feature gate and
-    # `memorySwap.swapBehavior: LimitedSwap` in that same config, and neither
-    # is reachable through minikube's `--feature-gates` or `--extra-config`
-    # flags (the latter only whitelists 4 unrelated kubelet keys). So this
-    # patches the generated file directly, inside the node container, and
-    # restarts kubelet — verified against a live cluster: without this, every
-    # container's memory.swap.max cgroup file reads "max" (unmanaged); with
-    # it, containers that set a memory limit correctly get "0" (LimitedSwap
-    # denies them swap) while limit-less containers keep "max".
     - name: Check whether LimitedSwap is already configured
       ansible.builtin.command:
         argv:
-          - docker
-          - exec
-          - minikube
-          - sh
-          - -c
-          - "grep -q 'swapBehavior: LimitedSwap' /var/lib/kubelet/config.yaml && grep -q 'NodeSwap: true' /var/lib/kubelet/config.yaml"
-      register: minikube_limited_swap_configured
+          - grep
+          - -q
+          - "swapBehavior: LimitedSwap"
+          - /var/lib/kubelet/config.yaml
+      register: minikube_limited_swap_swap_check
+      changed_when: false
+      failed_when: false
+
+    - name: Check whether the NodeSwap feature gate is already enabled
+      ansible.builtin.command:
+        argv:
+          - grep
+          - -q
+          - "NodeSwap: true"
+          - /var/lib/kubelet/config.yaml
+      register: minikube_limited_swap_feature_check
       changed_when: false
       failed_when: false
 
     - name: Patch the kubelet config and restart kubelet
-      when: minikube_limited_swap_configured.rc != 0
+      when: minikube_limited_swap_swap_check.rc != 0 or minikube_limited_swap_feature_check.rc != 0
       block:
         - name: Set memorySwap.swapBehavior to LimitedSwap
-          ansible.builtin.command:
-            argv:
-              - docker
-              - exec
-              - minikube
-              - sed
-              - -i
-              - "s/^memorySwap: {}/memorySwap:\\n  swapBehavior: LimitedSwap/"
-              - /var/lib/kubelet/config.yaml
-          changed_when: true
+          ansible.builtin.replace:
+            path: /var/lib/kubelet/config.yaml
+            regexp: '^memorySwap: {}$'
+            replace: "memorySwap:\n  swapBehavior: LimitedSwap"
 
         - name: Enable the NodeSwap kubelet feature gate
           ansible.builtin.command:
             argv:
-              - docker
-              - exec
-              - minikube
               - sh
               - -c
               - "printf 'featureGates:\\n  NodeSwap: true\\n' >> /var/lib/kubelet/config.yaml"
           changed_when: true
 
-        - name: Restart kubelet inside the minikube node to apply the new config
-          ansible.builtin.command:
-            argv: [docker, exec, minikube, systemctl, restart, kubelet]
-          changed_when: true
+        - name: Restart kubelet to apply the new config
+          ansible.builtin.systemd_service:
+            name: kubelet
+            daemon_reload: true
+            state: restarted
 
         - name: Wait for the control-plane node to become Ready again
           ansible.builtin.command: >-
             kubectl wait --for=condition=Ready nodes --all --timeout=120s
-          become: true
-          become_user: "{{ minikube_user }}"
           environment:
-            HOME: "{{ minikube_home }}"
-            MINIKUBE_HOME: "{{ minikube_home }}/.minikube"
+            KUBECONFIG: "{{ minikube_home }}/.kube/config"
           changed_when: false
 
 - name: Collect the current addon states
   ansible.builtin.command: "{{ minikube_bin }} addons list -o json"
-  become: true
-  become_user: "{{ minikube_user }}"
   environment:
-    HOME: "{{ minikube_home }}"
-    MINIKUBE_HOME: "{{ minikube_home }}/.minikube"
     MINIKUBE_IN_STYLE: "false"
   register: minikube_addons_state
   changed_when: false
 
 - name: Enable the requested minikube addons
   ansible.builtin.command: "{{ minikube_bin }} addons enable {{ item }}"
-  become: true
-  become_user: "{{ minikube_user }}"
   environment:
-    HOME: "{{ minikube_home }}"
-    MINIKUBE_HOME: "{{ minikube_home }}/.minikube"
     MINIKUBE_IN_STYLE: "false"
   loop: "{{ minikube_addons | difference(minikube_addons_enabled) }}"
   changed_when: true
@@ -202,37 +177,24 @@
          | selectattr('value.Status', 'equalto', 'enabled')
          | map(attribute='key') | list }}
 
-- name: Read the minikube user kubeconfig
+- name: Read the minikube kubeconfig
   ansible.builtin.slurp:
     src: "{{ minikube_home }}/.kube/config"
   register: minikube_kubeconfig
-  when: minikube_share_kubeconfig_with_root | bool or minikube_expose_apiserver | bool
-
-- name: Share the kubeconfig with root
-  when: minikube_share_kubeconfig_with_root | bool
-  block:
-    - name: Ensure /root/.kube exists
-      ansible.builtin.file:
-        path: /root/.kube
-        state: directory
-        owner: root
-        group: root
-        mode: "0700"
-
-    - name: Install the kubeconfig for root
-      ansible.builtin.copy:
-        content: "{{ minikube_kubeconfig.content | b64decode }}"
-        dest: /root/.kube/config
-        owner: root
-        group: root
-        mode: "0600"
+  when: minikube_expose_apiserver | bool
 
 - name: Export a kubeconfig for remote access
   when: minikube_expose_apiserver | bool
   block:
+    # Only meaningful for the docker driver: minikube's docker/podman driver
+    # publishes the apiserver port through a Docker port mapping, and the
+    # actual host-side port isn't guaranteed to equal the requested
+    # --apiserver-port. --driver=none runs kubelet directly on the host, so
+    # there's no NAT — the configured port IS the real one.
     - name: Discover the published API server host port
       ansible.builtin.command: "docker port minikube {{ minikube_apiserver_port }}/tcp"
       register: minikube_apiserver_port_raw
+      when: minikube_driver == 'docker'
       changed_when: false
 
     - name: Ensure the output directory exists on the control node
@@ -254,4 +216,6 @@
       delegate_to: localhost
       become: false
       vars:
-        minikube_apiserver_host_port: "{{ minikube_apiserver_port_raw.stdout | trim | regex_replace('^.*:', '') }}"
+        minikube_apiserver_host_port: >-
+          {{ (minikube_apiserver_port_raw.stdout | trim | regex_replace('^.*:', ''))
+             if minikube_driver == 'docker' else (minikube_apiserver_port | string) }}

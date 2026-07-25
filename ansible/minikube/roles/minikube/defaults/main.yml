@@ -2,7 +2,6 @@
 minikube_version: latest
 minikube_kubernetes_version: "v1.36.3"
 minikube_driver: docker
-minikube_user: minikube
 minikube_cpus: 2
 minikube_memory: 4096
 minikube_disk_size: 30g
@@ -15,7 +14,6 @@ minikube_extra_args: []
 # Set to false to install the binary + unit without bringing a cluster up
 # (e.g. when baking an image).
 minikube_start_cluster: true
-minikube_share_kubeconfig_with_root: true
 minikube_start_timeout: 900
 
 minikube_apiserver_port: 8443

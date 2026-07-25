@@ -18,13 +18,15 @@
   roles:
     - role: common
       tags: [common]
-    - role: docker
-      tags: [docker]
     - role: kubectl
       tags: [kubectl]
     - role: helm
       tags: [helm]
     - role: k9s
       tags: [k9s]
+    - role: docker
+      tags: [docker]
+    - role: cri-dockerd
+      tags: [cri-dockerd]
     - role: minikube
       tags: [minikube]

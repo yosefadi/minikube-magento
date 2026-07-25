@@ -1,11 +1,12 @@
 ---
-# KEEP THIS FILE BYTE-IDENTICAL (aside from this header) to
-# inventory/demo/group_vars/minikube.yml. Testing exists to rehearse exactly
-# what demo will get, so every value below must match its sibling file
-# exactly — if you change one, change the other in the same edit.
+# Testing inventory — diverged from demo because testing uses --driver=none
+# while demo uses the default (docker).  The resource values below should still
+# match demo's as closely as possible so this environment can rehearse what the
+# demo host will get (driver choice being the deliberate exception).
 #
 # Sized for a host with ~3.9-4.0 GiB RAM / 2 vCPUs / enough disk for 50g (both
 # the testing Hyper-V VM and the demo Linode box were confirmed to fit this).
+minikube_driver: none
 minikube_cpus: 2
 minikube_memory: 2800
 minikube_disk_size: 50g

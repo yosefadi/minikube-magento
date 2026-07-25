@@ -63,15 +63,13 @@ Per-environment overrides live in each inventory's own `group_vars/minikube.yml`
 | `minikube_version` | `latest` | or a tag such as `v1.36.0` |
 | `minikube_kubernetes_version` | `v1.36.3` | keep in sync with `kubectl_apt_channel` |
 | `kubectl_apt_channel` | `v1.36` | apt track at `pkgs.k8s.io`; bumping this alone is enough — the role releases kubectl's version hold, upgrades, and re-holds automatically |
-| `minikube_driver` | `docker` | |
-| `minikube_user` | `minikube` | the docker driver refuses to run as root |
+| `minikube_driver` | `docker` | `none` runs kubelet directly on the host (needs the `cri-dockerd` role) instead of a docker/podman node container |
 | `minikube_cpus` / `minikube_memory` | `2` / `4096` | MiB |
 | `minikube_disk_size` | `30g` | |
 | `minikube_nodes` | `1` | |
 | `minikube_addons` | `default-storageclass`, `storage-provisioner`, `ingress`, `metrics-server` | |
 | `minikube_extra_args` | `[]` | appended verbatim to `minikube start` |
 | `minikube_start_cluster` | `true` | `false` installs everything but leaves the cluster down |
-| `minikube_share_kubeconfig_with_root` | `true` | copies the cert-embedded kubeconfig to `/root/.kube/config` |
 | `docker_version` | `latest` | pin e.g. `5:27.3.1-1~ubuntu.24.04~noble` |
 | `common_disable_swap` | `true` | |
 | `helm_install` | `true` | |
@@ -82,28 +80,25 @@ Per-environment overrides live in each inventory's own `group_vars/minikube.yml`
 | `minikube_expose_apiserver` | `false` | `true` publishes the apiserver on `minikube_listen_address` and writes `output/kubectl-<env>.yaml` — see below |
 | `minikube_listen_address` | `0.0.0.0` | bind address for the docker-published apiserver port (docker/podman driver only) |
 | `minikube_remote_access_host` | `{{ ansible_host }}` | IP baked into the cert SAN and the exported kubeconfig's `server:` |
-| `minikube_apiserver_port` | `8443` | in-cluster apiserver port; the *published* host port is auto-detected via `docker port` and may differ |
+| `minikube_apiserver_port` | `8443` | in-cluster apiserver port; on the docker driver the *published* host port is auto-detected via `docker port` and may differ, on `--driver=none` it's the real host port directly |
 | `minikube_env_name` | `{{ inventory_dir \| basename }}` | e.g. `demo` / `testing`; names the exported kubeconfig file |
 | `minikube_enable_limited_swap` | `false` | manages swap via Kubernetes' `NodeSwap`/`LimitedSwap` instead of leaving it unmanaged — see below; only meaningful when `common_disable_swap` is `false` |
 
 ## Verifying
 
+Everything runs as root now (`minikube_home` is `/root`), so no `sudo -iu`
+is needed:
+
 ```bash
-ssh <host> 'sudo -iu minikube kubectl get nodes -o wide'
-ssh <host> 'sudo -iu minikube minikube status'
-ssh <host> 'sudo -iu minikube k9s version --short'
+ssh <host> 'kubectl get nodes -o wide'
+ssh <host> 'minikube status'
+ssh <host> 'k9s version --short'
 ```
 
-`k9s` reads the same `KUBECONFIG` as `kubectl`, so `sudo -iu minikube k9s` (or
-`sudo k9s` when `minikube_share_kubeconfig_with_root` is on) drops straight
-into the cluster's TUI.
-
-`kubectl` also works directly as root when
-`minikube_share_kubeconfig_with_root` is on. That kubeconfig points at the
-cluster's internal IP (e.g. `192.168.49.2`), so it is only usable from the VM
-itself — for remote access without opening anything, use `kubectl
---kubeconfig` over an SSH tunnel or `minikube tunnel` instead of the option
-below.
+`k9s`/`kubectl` read `/root/.kube/config`, which points at the cluster's
+internal IP (e.g. `192.168.49.2`), so it's only usable from the VM itself —
+for remote access without opening anything, use `kubectl --kubeconfig` over
+an SSH tunnel or `minikube tunnel` instead of the option below.
 
 ## Remote access (`output/kubectl-<env>.yaml`)
 

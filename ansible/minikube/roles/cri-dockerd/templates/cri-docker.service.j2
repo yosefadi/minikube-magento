@@ -1,0 +1,18 @@
+# {{ ansible_managed }}
+[Unit]
+Description=CRI Interface for Docker (cri-dockerd)
+Documentation=https://github.com/Mirantis/cri-dockerd
+After=docker.service network-online.target
+Wants=docker.service
+
+[Service]
+Type=notify
+ExecStart={{ cri_dockerd_bin }} --container-runtime-endpoint unix:///var/run/cri-dockerd.sock --network-plugin=cni
+ExecReload=/bin/kill -s HUP $MAINPID
+TimeoutSec=0
+RestartSec=2
+Restart=always
+StartLimitInterval=0
+
+[Install]
+WantedBy=multi-user.target

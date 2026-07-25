@@ -52,12 +52,36 @@
          if docker_version != 'latest' else docker_packages }}
     state: present
 
-- name: Write /etc/docker/daemon.json
-  ansible.builtin.copy:
-    content: "{{ docker_daemon_options | to_nice_json }}\n"
-    dest: /etc/docker/daemon.json
-    mode: "0644"
-  notify: Restart docker
+- name: Manage /etc/docker/daemon.json
+  # --driver=none reconfigures the HOST's own Docker daemon during
+  # `minikube start` (exec-opts.native.cgroupdriver=systemd, storage-driver)
+  # so its cgroup driver matches kubelet's — verified live that our own
+  # daemon.json management fights this: minikube writes its config during
+  # the node bootstrap, and the very next playbook run detects that as
+  # "drift" from our minimal log-driver-only config and overwrites it back,
+  # restarting Docker and stripping the cgroup-driver alignment minikube
+  # just set up. The docker driver's node runs its own separate nested
+  # daemon and never touches the host's file, so this only matters for
+  # --driver=none — defer to minikube entirely there.
+  when: minikube_driver != 'none'
+  block:
+    - name: Check if daemon.json needs updating
+      ansible.builtin.slurp:
+        src: /etc/docker/daemon.json
+      register: docker_daemon_current
+      failed_when: false
+
+    - name: Compute expected daemon.json content
+      ansible.builtin.set_fact:
+        docker_daemon_expected: "{{ docker_daemon_options | to_nice_json }}"
+
+    - name: Write /etc/docker/daemon.json
+      ansible.builtin.copy:
+        content: "{{ docker_daemon_expected }}\n"
+        dest: /etc/docker/daemon.json
+        mode: "0644"
+      when: docker_daemon_current.content | default('') | b64decode | trim != docker_daemon_expected | trim
+      notify: Restart docker
 
 - name: Ensure Docker is enabled and running
   ansible.builtin.systemd_service:

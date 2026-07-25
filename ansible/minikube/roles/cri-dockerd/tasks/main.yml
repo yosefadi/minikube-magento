@@ -1,0 +1,82 @@
+---
+- name: Check the installed cri-dockerd version
+  ansible.builtin.command: "{{ cri_dockerd_bin }} --version"
+  register: cri_dockerd_installed
+  changed_when: false
+  failed_when: false
+
+- name: Resolve the latest cri-dockerd version
+  ansible.builtin.uri:
+    url: https://api.github.com/repos/Mirantis/cri-dockerd/releases/latest
+    return_content: true
+  register: cri_dockerd_latest
+  when: cri_dockerd_version == 'latest'
+  changed_when: false
+  failed_when: false
+
+- name: Set the target cri-dockerd version
+  ansible.builtin.set_fact:
+    cri_dockerd_target_version: >-
+      {{ (cri_dockerd_latest.json.tag_name | default(cri_dockerd_version))
+         if cri_dockerd_version == 'latest' else cri_dockerd_version }}
+
+- name: Extract the installed cri-dockerd version
+  ansible.builtin.set_fact:
+    cri_dockerd_installed_version: >-
+      {{ (cri_dockerd_installed.stdout | default(''))
+         | regex_search('cri-dockerd\s+(\S+)', '\1')
+         | first | default('') }}
+
+- name: Install cri-dockerd
+  when: cri_dockerd_target_version not in ('v' ~ cri_dockerd_installed_version) and cri_dockerd_target_version != cri_dockerd_version
+  block:
+    - name: Download the cri-dockerd archive
+      ansible.builtin.get_url:
+        url: >-
+          https://github.com/Mirantis/cri-dockerd/releases/download/{{ cri_dockerd_target_version }}/cri-dockerd-{{ cri_dockerd_target_version | regex_replace('^v', '') }}.{{ cri_dockerd_arch }}.tgz
+        dest: /tmp/cri-dockerd-{{ cri_dockerd_target_version }}.{{ cri_dockerd_arch }}.tgz
+        mode: "0644"
+
+    - name: Extract the cri-dockerd archive
+      ansible.builtin.unarchive:
+        src: /tmp/cri-dockerd-{{ cri_dockerd_target_version }}.{{ cri_dockerd_arch }}.tgz
+        dest: /tmp/
+        remote_src: true
+
+    - name: Install the cri-dockerd binary
+      ansible.builtin.copy:
+        src: /tmp/cri-dockerd/cri-dockerd
+        dest: "{{ cri_dockerd_bin }}"
+        owner: root
+        group: root
+        mode: "0755"
+        remote_src: true
+      notify: Restart cri-docker
+
+    - name: Install the cri-docker systemd units
+      ansible.builtin.template:
+        src: "{{ item }}.j2"
+        dest: "/etc/systemd/system/{{ item }}"
+        mode: "0644"
+      loop:
+        - cri-docker.service
+        - cri-docker.socket
+      notify: Restart cri-docker
+
+    - name: Clean up the extracted files
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - /tmp/cri-dockerd-{{ cri_dockerd_target_version }}.{{ cri_dockerd_arch }}.tgz
+        - /tmp/cri-dockerd
+
+- name: Flush pending cri-docker restarts before the socket/service check
+  ansible.builtin.meta: flush_handlers
+
+- name: Ensure cri-docker is enabled and running
+  ansible.builtin.systemd_service:
+    name: cri-docker
+    state: started
+    enabled: true
+    daemon_reload: true

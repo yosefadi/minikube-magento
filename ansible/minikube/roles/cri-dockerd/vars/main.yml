@@ -1,0 +1,2 @@
+---
+cri_dockerd_arch: "{{ 'arm64' if ansible_facts['architecture'] == 'aarch64' else 'amd64' }}"
