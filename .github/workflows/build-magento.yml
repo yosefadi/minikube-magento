@@ -62,6 +62,6 @@ jobs:
             --dockerfile=Dockerfile \
             "${DEST_FLAGS[@]}" \
             --cache=true \
-            --cache-repository="${REGISTRY}/${IMAGE_NAME}/cache" \
-            --compressed \
+            "--cache-repo=${REGISTRY}/${IMAGE_NAME}/cache" \
+            --compressed-caching \
             --verbosity=info
