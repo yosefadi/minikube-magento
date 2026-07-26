@@ -30,3 +30,6 @@ minikube_addons:
 # Cloud Firewall / security group check happens; do not run this playbook
 # against the demo Linode host while this is true without doing that check.
 minikube_expose_apiserver: true
+
+# GitOps overlay path for this environment
+fluxcd_git_path: ./kubernetes/gitops/overlays/demo
