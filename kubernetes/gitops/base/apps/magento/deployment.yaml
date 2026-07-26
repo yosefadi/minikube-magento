@@ -65,6 +65,11 @@ spec:
                 secretKeyRef:
                   name: magento-credentials
                   key: admin-user
+            - name: MAGENTO_DRAGONFLY_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: magento-credentials
+                  key: dragonfly-password
           livenessProbe:
             tcpSocket:
               port: 9000

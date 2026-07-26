@@ -4,6 +4,9 @@ apps_namespace: apps
 mariadb_secret_name: mariadb-credentials
 mariadb_namespace: infrastructure
 
+dragonfly_secret_name: dragonfly-credentials
+dragonfly_namespace: infrastructure
+
 magento_secret_name: magento-credentials
 magento_admin_user: admin
 magento_admin_email: admin@example.com

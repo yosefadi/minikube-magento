@@ -27,6 +27,12 @@ cd /var/www/html
 : "${MAGENTO_ADMIN_USER:=admin}"
 : "${MAGENTO_ADMIN_PASSWORD:?MAGENTO_ADMIN_PASSWORD is required}"
 
+# Optional: only wired up if MAGENTO_DRAGONFLY_HOST is set, so this image
+# still works standalone (e.g. a quick local test) without a cache backend.
+: "${MAGENTO_DRAGONFLY_HOST:=}"
+: "${MAGENTO_DRAGONFLY_PORT:=6379}"
+: "${MAGENTO_DRAGONFLY_PASSWORD:=}"
+
 wait_for_tcp() {
   local host="$1" port="$2" label="$3" attempt=0
   until (exec 3<>"/dev/tcp/${host}/${port}") 2>/dev/null; do
@@ -43,6 +49,9 @@ wait_for_tcp() {
 
 wait_for_tcp "$MAGENTO_DB_HOST" "$MAGENTO_DB_PORT" "MariaDB"
 wait_for_tcp "$MAGENTO_OPENSEARCH_HOST" "$MAGENTO_OPENSEARCH_PORT" "OpenSearch"
+if [ -n "$MAGENTO_DRAGONFLY_HOST" ]; then
+  wait_for_tcp "$MAGENTO_DRAGONFLY_HOST" "$MAGENTO_DRAGONFLY_PORT" "Dragonfly"
+fi
 
 # Not a plain file-existence check: setup:di:compile (run at build time) writes
 # its own minimal app/etc/env.php as a side effect — just a cache_types key,
@@ -102,6 +111,67 @@ fi
 if [ ! -d pub/static/frontend ] && [ ! -d pub/static/adminhtml ]; then
   echo "No deployed static content found — running static-content:deploy."
   bin/magento setup:static-content:deploy -f ${MAGENTO_STATIC_CONTENT_LANGUAGES} --jobs "$(nproc)"
+fi
+
+# There's no `bin/magento` flag for the cache/page_cache/session backends
+# (unlike --db-*/--opensearch-*, which setup:install takes directly), so this
+# rewrites env.php's 'cache' and 'session' arrays by hand. Runs every boot,
+# not just on a fresh install, so an existing volume's env.php still gets
+# pointed at Dragonfly after this image is upgraded onto a site that
+# predates it — cheap and idempotent either way.
+#
+# backend "redis" (lowercase), not the classic "Cm_Cache_Backend_Redis" from
+# stock Magento's own devdocs: this codebase's cache layer
+# (lib/internal/Magento/Framework/Cache/Frontend/Adapter/SymfonyAdapterProvider.php)
+# replaced the legacy Zend_Cache backend resolution with its own adapter
+# type map that only recognizes a handful of literal lowercase strings
+# ("redis", "valkey", "memcached", ...) — anything else falls through to its
+# filesystem adapter silently, no error, no warning. Verified live: with the
+# classic Cm_Cache_Backend_Redis string, cache:flush "succeeds" and var/cache
+# still fills up with files instead of a single byte reaching Dragonfly.
+if [ -n "$MAGENTO_DRAGONFLY_HOST" ]; then
+  echo "Pointing cache, full_page cache, and sessions at Dragonfly (${MAGENTO_DRAGONFLY_HOST}:${MAGENTO_DRAGONFLY_PORT})."
+  MAGENTO_DRAGONFLY_HOST="$MAGENTO_DRAGONFLY_HOST" \
+  MAGENTO_DRAGONFLY_PORT="$MAGENTO_DRAGONFLY_PORT" \
+  MAGENTO_DRAGONFLY_PASSWORD="$MAGENTO_DRAGONFLY_PASSWORD" \
+  php -r '
+    $envFile = "app/etc/env.php";
+    $config = include $envFile;
+
+    $host = getenv("MAGENTO_DRAGONFLY_HOST");
+    $port = getenv("MAGENTO_DRAGONFLY_PORT");
+    $password = getenv("MAGENTO_DRAGONFLY_PASSWORD");
+
+    $redisBackend = function ($database) use ($host, $port, $password) {
+        return [
+            "backend" => "redis",
+            "backend_options" => [
+                "server" => $host,
+                "port" => $port,
+                "password" => $password,
+                "database" => $database,
+                "compress_data" => "1",
+            ],
+        ];
+    };
+
+    $config["cache"]["frontend"]["default"] = $redisBackend("0");
+    $config["cache"]["frontend"]["page_cache"] = $redisBackend("1");
+
+    $config["session"] = [
+        "save" => "redis",
+        "redis" => [
+            "host" => $host,
+            "port" => $port,
+            "password" => $password,
+            "database" => "2",
+            "compression_threshold" => "2048",
+            "compression_library" => "gzip",
+        ],
+    ];
+
+    file_put_contents($envFile, "<?php\nreturn " . var_export($config, true) . ";\n");
+  '
 fi
 
 bin/magento cache:flush

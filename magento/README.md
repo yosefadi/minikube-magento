@@ -77,6 +77,9 @@ present or missing on any given start):
 | `MAGENTO_STATIC_CONTENT_LANGUAGES` | no | `$MAGENTO_LANGUAGE` | space-separated, for `setup:static-content:deploy -f`; set if you need more than one storefront locale |
 | `MAGENTO_TIMEZONE` | no | `UTC` | |
 | `MAGENTO_CURRENCY` | no | `USD` | |
+| `MAGENTO_DRAGONFLY_HOST` | no | — | if set, cache/full_page-cache/sessions move to Dragonfly (Redis-protocol) — see below |
+| `MAGENTO_DRAGONFLY_PORT` | no | `6379` | |
+| `MAGENTO_DRAGONFLY_PASSWORD` | no | — | |
 
 Listens on `8080` (unprivileged — no root required to bind it).
 
@@ -97,11 +100,34 @@ at least `app/etc` and `pub/static`).
 ```bash
 docker compose up --build
 # first boot runs the full installer — watch the logs
-docker compose logs -f magento
+docker compose logs -f magento-php
 ```
 
 Then hit `http://localhost:8080/`. Admin panel is at
-`http://localhost:8080/<MAGENTO_BACKEND_FRONTNAME>` (default `admin`).
+`http://localhost:8080/<MAGENTO_BACKEND_FRONTNAME>` (default `admin`,
+`panel` in `docker-compose.yml` here to match the k8s configmap).
+
+## Cache/session backend (Dragonfly)
+
+Set `MAGENTO_DRAGONFLY_HOST` and the entrypoint rewrites `app/etc/env.php`'s
+`cache` and `session` arrays on every boot (fresh install or upgrade alike)
+to point the default cache, full_page cache, and sessions at it — three
+separate logical DBs (0/1/2) on the same instance. Dragonfly speaks the
+Redis wire protocol, so no PHP extension or image change was needed.
+
+One thing that cost real debugging time and is worth knowing if you touch
+this: **the `backend` value must be the literal lowercase string `"redis"`**,
+not the classic `"Cm_Cache_Backend_Redis"` from stock Magento's own devdocs.
+This codebase's cache layer
+(`lib/internal/Magento/Framework/Cache/Frontend/Adapter/SymfonyAdapterProvider.php`)
+replaced the legacy Zend_Cache backend resolution with its own adapter type
+map that only recognizes a handful of literal strings (`redis`, `valkey`,
+`memcached`, ...) — anything else silently falls through to its filesystem
+adapter. No error, no warning, `cache:flush` reports success either way —
+the only symptom is `var/cache` quietly still filling up with files instead
+of a single key reaching Dragonfly. Confirmed live with `MONITOR` on the
+Dragonfly side and by watching `var/cache`'s file count stay flat only
+after using the right string.
 
 ### MariaDB and OpenSearch requirements found by actually running this
 
@@ -124,10 +150,9 @@ eventually runs under):
   no email queue processing. Needs a sidecar/CronJob running the same image
   with `crontab` populated by `bin/magento cron:install`, sharing the same
   `app/code` and DB.
-- No Redis — cache/session/full-page-cache all default to the filesystem
-  and MariaDB. Fine for a single replica; add Redis and the corresponding
-  `env.php` cache backends before scaling to more than one pod.
-- Everything in the container runs as `root` (nginx master + php-fpm master
-  both start as root, workers drop to `www-data`) — standard for a dev
-  image, but worth hardening (non-root, read-only root filesystem) before
-  this goes anywhere more exposed than a dev/demo cluster.
+- Dragonfly here is a single instance with no persistence (pure cache) — a
+  restart just means a cold cache and logged-out sessions, not data loss of
+  anything that isn't itself recoverable from MariaDB/OpenSearch. Fine for
+  one replica; if this ever needs multi-replica HA, look at the
+  [Dragonfly Operator](https://github.com/dragonflydb/dragonfly-operator)
+  rather than hand-rolling replication.

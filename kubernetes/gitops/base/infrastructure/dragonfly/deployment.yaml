@@ -1,0 +1,60 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dragonfly
+  namespace: infrastructure
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: dragonfly
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: dragonfly
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+      containers:
+        - name: dragonfly
+          image: docker.dragonflydb.io/dragonflydb/dragonfly:v1.39.0
+          imagePullPolicy: IfNotPresent
+          args:
+            - --requirepass=$(DRAGONFLY_PASSWORD)
+            # Dragonfly sizes its thread pool off the host's CPU count, not
+            # the container's cpu limit, and wants ~256MiB per thread —
+            # verified live that leaving this unset on a many-core host
+            # makes it demand several GiB and refuse to start. Pin both to
+            # match the resources below.
+            - --proactor_threads=1
+            - --maxmemory=256mb
+            # Pure cache: no volume mounted, so nothing to snapshot to.
+            - --dbfilename=""
+          ports:
+            - containerPort: 6379
+              name: redis
+          env:
+            - name: DRAGONFLY_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: dragonfly-credentials
+                  key: password
+          livenessProbe:
+            tcpSocket:
+              port: 6379
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          readinessProbe:
+            tcpSocket:
+              port: 6379
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              memory: 256Mi

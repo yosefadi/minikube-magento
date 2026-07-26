@@ -20,6 +20,19 @@
     __mariadb_database: "{{ (__mariadb_secret_json.stdout | from_json).data['magento-database'] | b64decode }}"
     __mariadb_password: "{{ (__mariadb_secret_json.stdout | from_json).data['magento-password'] | b64decode }}"
 
+- name: Read Dragonfly credentials from infrastructure namespace
+  ansible.builtin.shell:
+    cmd: >
+      kubectl get secret {{ dragonfly_secret_name }}
+      --namespace {{ dragonfly_namespace }}
+      -o json
+  register: __dragonfly_secret_json
+  changed_when: false
+
+- name: Decode Dragonfly credentials
+  ansible.builtin.set_fact:
+    __dragonfly_password: "{{ (__dragonfly_secret_json.stdout | from_json).data['password'] | b64decode }}"
+
 - name: Generate Magento admin password
   ansible.builtin.set_fact:
     __magento_admin_password: "{{ lookup('password', '/dev/null chars=' ~ magento_admin_password_chars ~ ' length=' ~ magento_admin_password_length | string) }}"
@@ -35,6 +48,7 @@
       --from-literal=admin-password='{{ __magento_admin_password }}'
       --from-literal=admin-email='{{ magento_admin_email }}'
       --from-literal=admin-user='{{ magento_admin_user }}'
+      --from-literal=dragonfly-password='{{ __dragonfly_password }}'
       --dry-run=client -o yaml | kubectl apply -f -
   register: __magento_secret_apply
   changed_when: '"unchanged" not in __magento_secret_apply.stdout'
@@ -49,6 +63,7 @@
       - "  admin-user: {{ magento_admin_user }}"
       - "  admin-password: {{ __magento_admin_password }}"
       - "  admin-email: {{ magento_admin_email }}"
+      - "  dragonfly-password: {{ __dragonfly_password }}"
 
 - name: Check if GHCR credentials secret exists
   ansible.builtin.shell:

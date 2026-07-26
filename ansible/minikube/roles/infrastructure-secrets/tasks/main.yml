@@ -33,6 +33,26 @@
       - "  magento-password: {{ __mariadb_password }}"
       - "  magento-database: {{ __mariadb_database }}"
 
+- name: Generate Dragonfly credentials
+  ansible.builtin.set_fact:
+    __dragonfly_password: "{{ lookup('password', '/dev/null chars=ascii_letters,digits length=' ~ dragonfly_password_length | string) }}"
+
+- name: Create or update Dragonfly credentials secret
+  ansible.builtin.shell:
+    cmd: >
+      kubectl create secret generic {{ dragonfly_secret_name }}
+      --namespace {{ infrastructure_namespace }}
+      --from-literal=password='{{ __dragonfly_password }}'
+      --dry-run=client -o yaml | kubectl apply -f -
+  register: __dragonfly_secret_apply
+  changed_when: '"unchanged" not in __dragonfly_secret_apply.stdout'
+
+- name: Show Dragonfly credentials
+  ansible.builtin.debug:
+    msg:
+      - "Dragonfly credentials stored in secret '{{ dragonfly_secret_name }}' (namespace: {{ infrastructure_namespace }})"
+      - "  password: {{ __dragonfly_password }}"
+
 - name: Check if cloudflared tunnel token secret exists
   ansible.builtin.shell:
     cmd: kubectl get secret {{ cloudflared_secret_name }} --namespace {{ infrastructure_namespace }} -o name 2>&1 || true

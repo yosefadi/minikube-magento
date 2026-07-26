@@ -21,6 +21,15 @@ services:
     volumes:
       - opensearch-data:/usr/share/opensearch/data
 
+  dragonfly:
+    image: docker.dragonflydb.io/dragonflydb/dragonfly:v1.39.0
+    # Dragonfly sizes its thread pool off the *host's* CPU count, not any
+    # per-container limit, and wants ~256MiB of maxmemory per thread —
+    # verified live that leaving this unset demands several GiB on a
+    # many-core dev machine and refuses to start.
+    command: ["--requirepass=${DRAGONFLY_PASSWORD}", "--proactor_threads=1", "--maxmemory=256mb", "--dbfilename="]
+    user: "1000:1000"
+
   # magento-php and magento-nginx run as www-data, not root — mirroring
   # production where the pod's securityContext.fsGroup does this instead.
   # Docker/podman named volumes start out root-owned on first use, and
@@ -46,6 +55,8 @@ services:
         condition: service_started
       opensearch:
         condition: service_started
+      dragonfly:
+        condition: service_started
     environment:
       MAGENTO_BASE_URL: http://localhost:8080/
       MAGENTO_DB_HOST: mariadb
@@ -55,6 +66,8 @@ services:
       MAGENTO_OPENSEARCH_HOST: opensearch
       MAGENTO_ADMIN_EMAIL: admin@example.com
       MAGENTO_ADMIN_PASSWORD: ${MAGENTO_ADMIN_PASSWORD}
+      MAGENTO_DRAGONFLY_HOST: dragonfly
+      MAGENTO_DRAGONFLY_PASSWORD: ${DRAGONFLY_PASSWORD}
       # Matches the k8s configmap's non-default admin path — see
       # kubernetes/gitops/base/apps/magento/configmap.yaml.
       MAGENTO_BACKEND_FRONTNAME: panel

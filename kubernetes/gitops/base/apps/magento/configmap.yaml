@@ -13,6 +13,8 @@ data:
   MAGENTO_OPENSEARCH_HOST: opensearch-cluster-master.infrastructure.svc.cluster.local
   MAGENTO_OPENSEARCH_PORT: "9200"
   MAGENTO_OPENSEARCH_INDEX_PREFIX: magento2
+  MAGENTO_DRAGONFLY_HOST: dragonfly.infrastructure.svc.cluster.local
+  MAGENTO_DRAGONFLY_PORT: "6379"
   MAGENTO_ADMIN_EMAIL: admin@example.com
   MAGENTO_ADMIN_FIRSTNAME: Admin
   MAGENTO_ADMIN_LASTNAME: User

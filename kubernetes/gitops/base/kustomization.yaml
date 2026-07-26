@@ -9,6 +9,8 @@ resources:
   - infrastructure/mariadb/statefulset.yaml
   - infrastructure/mariadb/service.yaml
   - infrastructure/opensearch/release.yaml
+  - infrastructure/dragonfly/deployment.yaml
+  - infrastructure/dragonfly/service.yaml
   - infrastructure/cloudflared/deployment.yaml
   - infrastructure/networkpolicies/default-deny-ingress.yaml
   - infrastructure/networkpolicies/default-deny-egress.yaml
@@ -16,6 +18,7 @@ resources:
   - infrastructure/networkpolicies/allow-egress-to-magento.yaml
   - infrastructure/networkpolicies/allow-ingress-from-magento-mariadb.yaml
   - infrastructure/networkpolicies/allow-ingress-from-magento-opensearch.yaml
+  - infrastructure/networkpolicies/allow-ingress-from-magento-dragonfly.yaml
   - apps/namespace.yaml
   - apps/magento/configmap.yaml
   - apps/magento/service.yaml
@@ -27,3 +30,4 @@ resources:
   - apps/networkpolicies/allow-ingress-from-cloudflared.yaml
   - apps/networkpolicies/allow-egress-to-mariadb.yaml
   - apps/networkpolicies/allow-egress-to-opensearch.yaml
+  - apps/networkpolicies/allow-egress-to-dragonfly.yaml
