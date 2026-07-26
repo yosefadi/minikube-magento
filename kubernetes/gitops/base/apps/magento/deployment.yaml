@@ -18,7 +18,7 @@ spec:
     spec:
       initContainers:
         - name: init-app-etc
-          image: ghcr.io/yosefadi/minikube-magento/magento:2.4.9-88957dd
+          image: ghcr.io/yosefadi/minikube-magento/magento:2.4.9-60ec85a
           imagePullPolicy: IfNotPresent
           command:
             - sh
@@ -33,7 +33,7 @@ spec:
               mountPath: /mnt/app-etc
       containers:
         - name: magento
-          image: ghcr.io/yosefadi/minikube-magento/magento:2.4.9-88957dd
+          image: ghcr.io/yosefadi/minikube-magento/magento:2.4.9-60ec85a
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8080
