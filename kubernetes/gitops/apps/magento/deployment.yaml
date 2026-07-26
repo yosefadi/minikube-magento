@@ -1,0 +1,77 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: magento
+  namespace: apps
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: magento
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: magento
+    spec:
+      imagePullSecrets:
+        - name: ghcr-credentials
+      containers:
+        - name: magento
+          image: ghcr.io/yosefadi/minikube-magento/magento:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8080
+              name: http
+          envFrom:
+            - configMapRef:
+                name: magento-config
+          env:
+            - name: MAGENTO_DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: magento-credentials
+                  key: db-password
+            - name: MAGENTO_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: magento-credentials
+                  key: admin-password
+            - name: MAGENTO_ADMIN_USER
+              valueFrom:
+                secretKeyRef:
+                  name: magento-credentials
+                  key: admin-user
+          livenessProbe:
+            tcpSocket:
+              port: 8080
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          readinessProbe:
+            tcpSocket:
+              port: 8080
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 200m
+              memory: 256Mi
+            limits:
+              memory: 512Mi
+          volumeMounts:
+            - name: app-etc
+              mountPath: /var/www/html/app/etc
+            - name: pub-static
+              mountPath: /var/www/html/pub/static
+            - name: pub-media
+              mountPath: /var/www/html/pub/media
+      volumes:
+        - name: app-etc
+          persistentVolumeClaim:
+            claimName: magento-etc
+        - name: pub-static
+          persistentVolumeClaim:
+            claimName: magento-static
+        - name: pub-media
+          persistentVolumeClaim:
+            claimName: magento-media

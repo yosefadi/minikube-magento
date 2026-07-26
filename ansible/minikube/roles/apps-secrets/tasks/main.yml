@@ -1,0 +1,85 @@
+---
+- name: Ensure apps namespace exists
+  ansible.builtin.shell:
+    cmd: kubectl create namespace {{ apps_namespace }} --dry-run=client -o yaml | kubectl apply -f -
+  changed_when: false
+
+- name: Read MariaDB credentials from infrastructure namespace
+  ansible.builtin.shell:
+    cmd: >
+      kubectl get secret {{ mariadb_secret_name }}
+      --namespace {{ mariadb_namespace }}
+      -o json
+      | python3 -c "import sys,json; s=json.load(sys.stdin); print({k: __import__('base64').b64decode(v).decode() for k,v in s['data'].items()})"
+  register: __mariadb_secret_data
+  changed_when: false
+
+- name: Parse MariaDB credentials
+  ansible.builtin.set_fact:
+    __mariadb_root_password: "{{ (__mariadb_secret_data.stdout | from_json)['root-password'] }}"
+    __mariadb_user: "{{ (__mariadb_secret_data.stdout | from_json)['magento-user'] }}"
+    __mariadb_database: "{{ (__mariadb_secret_data.stdout | from_json)['magento-database'] }}"
+    __mariadb_password: "{{ (__mariadb_secret_data.stdout | from_json)['magento-password'] }}"
+
+- name: Generate Magento admin password
+  ansible.builtin.set_fact:
+    __magento_admin_password: "{{ lookup('password', '/dev/null chars=ascii_letters,digits length=' ~ magento_admin_password_length | string) }}"
+
+- name: Create or update Magento credentials secret
+  ansible.builtin.shell:
+    cmd: >
+      kubectl create secret generic {{ magento_secret_name }}
+      --namespace {{ apps_namespace }}
+      --from-literal=db-password='{{ __mariadb_password }}'
+      --from-literal=db-user='{{ __mariadb_user }}'
+      --from-literal=db-name='{{ __mariadb_database }}'
+      --from-literal=admin-password='{{ __magento_admin_password }}'
+      --from-literal=admin-email='{{ magento_admin_email }}'
+      --from-literal=admin-user='{{ magento_admin_user }}'
+      --dry-run=client -o yaml | kubectl apply -f -
+  register: __magento_secret_apply
+  changed_when: '"unchanged" not in __magento_secret_apply.stdout'
+
+- name: Show Magento credentials
+  ansible.builtin.debug:
+    msg:
+      - "Magento credentials stored in secret '{{ magento_secret_name }}' (namespace: {{ apps_namespace }})"
+      - "  db-user: {{ __mariadb_user }}"
+      - "  db-password: {{ __mariadb_password }}"
+      - "  db-name: {{ __mariadb_database }}"
+      - "  admin-user: {{ magento_admin_user }}"
+      - "  admin-password: {{ __magento_admin_password }}"
+      - "  admin-email: {{ magento_admin_email }}"
+
+- name: Check if GHCR credentials secret exists
+  ansible.builtin.shell:
+    cmd: kubectl get secret {{ ghcr_secret_name }} --namespace {{ apps_namespace }} -o name 2>&1 || true
+  register: __ghcr_secret_check
+  changed_when: false
+
+- name: Create placeholder GHCR credentials secret
+  when: '"not found" in __ghcr_secret_check.stdout or __ghcr_secret_check.stdout == ""'
+  ansible.builtin.shell:
+    cmd: >
+      kubectl create secret docker-registry {{ ghcr_secret_name }}
+      --namespace {{ apps_namespace }}
+      --docker-server=ghcr.io
+      --docker-username=placeholder
+      --docker-password={{ ghcr_placeholder_token }}
+      --dry-run=client -o yaml | kubectl apply -f -
+  register: __ghcr_secret_apply
+  changed_when: '"unchanged" not in __ghcr_secret_apply.stdout'
+
+- name: Warn about GHCR credentials
+  ansible.builtin.debug:
+    msg:
+      - "GHCR pull secret '{{ ghcr_secret_name }}' created with a placeholder."
+      - "Replace it with a real GitHub PAT (read:packages scope) if the image is private:"
+      - "  kubectl delete secret {{ ghcr_secret_name }} --namespace {{ apps_namespace }}"
+      - "  kubectl create secret docker-registry {{ ghcr_secret_name }} \\"
+      - "    --namespace {{ apps_namespace }} \\"
+      - "    --docker-server=ghcr.io \\"
+      - "    --docker-username=YOUR_GITHUB_USERNAME \\"
+      - "    --docker-password=YOUR_GITHUB_PAT_WITH_READPACKAGES_SCOPE"
+      - ""
+      - "Or make the GHCR package public to skip authentication entirely."

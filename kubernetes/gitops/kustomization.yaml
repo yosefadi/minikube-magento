@@ -7,3 +7,8 @@ resources:
   - infrastructure/mariadb/service.yaml
   - infrastructure/opensearch/release.yaml
   - infrastructure/cloudflared/deployment.yaml
+  - apps/namespace.yaml
+  - apps/magento/configmap.yaml
+  - apps/magento/service.yaml
+  - apps/magento/pvc.yaml
+  - apps/magento/deployment.yaml

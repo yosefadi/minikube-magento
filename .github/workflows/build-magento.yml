@@ -4,6 +4,7 @@ on:
   push:
     branches: [main]
     tags: ['v*']
+    paths: ['magento/**']
 
 env:
   REGISTRY: ghcr.io
@@ -13,7 +14,7 @@ jobs:
   build:
     runs-on: self-hosted
     permissions:
-      contents: read
+      contents: write
       packages: write
 
     steps:
@@ -65,3 +66,18 @@ jobs:
             "--cache-repo=${REGISTRY}/${IMAGE_NAME}/cache" \
             --compressed-caching \
             --verbosity=info
+
+      - name: Update deployment manifest with new image tag
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          FIRST_TAG=$(echo "${{ steps.meta.outputs.tags }}" | cut -d',' -f1)
+          DEPLOY_FILE="kubernetes/gitops/apps/magento/deployment.yaml"
+          sed -i "s|image: ghcr\.io/.*/magento:.*|image: ${FIRST_TAG}|" "${DEPLOY_FILE}"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git remote set-url origin "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          git add "${DEPLOY_FILE}"
+          git diff --staged --quiet || git commit -m "chore: update magento image to ${FIRST_TAG}"
+          git push
