@@ -10,8 +10,20 @@ resources:
   - infrastructure/mariadb/service.yaml
   - infrastructure/opensearch/release.yaml
   - infrastructure/cloudflared/deployment.yaml
+  - infrastructure/networkpolicies/default-deny-ingress.yaml
+  - infrastructure/networkpolicies/default-deny-egress.yaml
+  - infrastructure/networkpolicies/allow-egress-to-kube-dns.yaml
+  - infrastructure/networkpolicies/allow-egress-to-magento.yaml
+  - infrastructure/networkpolicies/allow-ingress-from-magento-mariadb.yaml
+  - infrastructure/networkpolicies/allow-ingress-from-magento-opensearch.yaml
   - apps/namespace.yaml
   - apps/magento/configmap.yaml
   - apps/magento/service.yaml
   - apps/magento/pvc.yaml
   - apps/magento/deployment.yaml
+  - apps/networkpolicies/default-deny-ingress.yaml
+  - apps/networkpolicies/default-deny-egress.yaml
+  - apps/networkpolicies/allow-egress-to-kube-dns.yaml
+  - apps/networkpolicies/allow-ingress-from-cloudflared.yaml
+  - apps/networkpolicies/allow-egress-to-mariadb.yaml
+  - apps/networkpolicies/allow-egress-to-opensearch.yaml

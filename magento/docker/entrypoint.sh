@@ -114,4 +114,4 @@ bin/magento cache:flush
 # 500s with "Permission denied".
 chown -R www-data:www-data var generated pub app/etc
 
-exec "$@"
+exec su www-data -s /bin/sh -c "supervisord -n -c /etc/supervisor/conf.d/supervisord.conf"
