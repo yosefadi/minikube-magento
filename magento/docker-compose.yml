@@ -2,14 +2,14 @@ services:
   mariadb:
     image: mariadb:12.3
     environment:
-      MARIADB_ROOT_PASSWORD: CHANGEME
-      MARIADB_DATABASE: magento
-      MARIADB_USER: magento
-      MARIADB_PASSWORD: CHANGEME
+      MARIADB_ROOT_PASSWORD: ${MARIADB_ROOT_PASSWORD}
+      MARIADB_DATABASE: ${MARIADB_DATABASE:-magento}
+      MARIADB_USER: ${MARIADB_USER:-magento}
+      MARIADB_PASSWORD: ${MARIADB_PASSWORD}
     volumes:
       - mariadb-data:/var/lib/mysql
     healthcheck:
-      test: ["CMD", "mariadb-admin", "ping", "-h", "localhost", "-u", "root", "-pCHANGEME"]
+      test: ["CMD-SHELL", "mariadb-admin ping -h localhost -u root -p'${MARIADB_ROOT_PASSWORD}'"]
       interval: 5s
       timeout: 5s
       retries: 20
@@ -21,7 +21,7 @@ services:
       plugins.security.disabled: "true"
       # Required since OpenSearch 2.12+ even with security disabled — the
       # demo installer checks for this before OpenSearch itself starts.
-      OPENSEARCH_INITIAL_ADMIN_PASSWORD: "CHANGEME"
+      OPENSEARCH_INITIAL_ADMIN_PASSWORD: ${OPENSEARCH_INITIAL_ADMIN_PASSWORD}
       OPENSEARCH_JAVA_OPTS: "-Xms512m -Xmx512m"
     volumes:
       - opensearch-data:/usr/share/opensearch/data
@@ -41,12 +41,12 @@ services:
     environment:
       MAGENTO_BASE_URL: http://localhost:8080/
       MAGENTO_DB_HOST: mariadb
-      MAGENTO_DB_NAME: magento
-      MAGENTO_DB_USER: magento
-      MAGENTO_DB_PASSWORD: CHANGEME
+      MAGENTO_DB_NAME: ${MARIADB_DATABASE:-magento}
+      MAGENTO_DB_USER: ${MARIADB_USER:-magento}
+      MAGENTO_DB_PASSWORD: ${MAGENTO_DB_PASSWORD}
       MAGENTO_OPENSEARCH_HOST: opensearch
       MAGENTO_ADMIN_EMAIL: admin@example.com
-      MAGENTO_ADMIN_PASSWORD: CHANGEME
+      MAGENTO_ADMIN_PASSWORD: ${MAGENTO_ADMIN_PASSWORD}
     ports:
       - "8080:8080"
     volumes:
