@@ -12,6 +12,7 @@ minikube_memory: 2800
 minikube_disk_size: 50g
 minikube_extra_args:
   - --force
+  - --extra-config=apiserver.feature-gates=ExtendWebSocketsToKubelet=false
 
 # Leave swap on and have Kubernetes actually manage it (KEP-2400) instead of
 # either the unmanaged fallback minikube uses by default, or disabling it.
