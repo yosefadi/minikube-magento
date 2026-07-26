@@ -261,3 +261,70 @@ Berdasarkan pengujian langsung di sesi ini (VM 2 vCPU / ~2.8 GiB RAM):
 
 Waktu bisa lebih lama tergantung kecepatan koneksi (pull image, download
 paket apt) dan kecepatan disk/CPU host.
+
+## 11. Panduan Provisioning Environment Baru (mis. Staging/Production)
+
+Repo ini dirancang supaya menambah environment baru berarti menambah **satu
+folder overlay Kustomize + satu folder inventory Ansible** — tanpa mengubah
+apa pun di `demo`/`testing` yang sudah ada. Setiap environment berjalan di
+VM-nya sendiri, dengan cluster Minikube sendiri, dan credential (MariaDB,
+Dragonfly, admin Magento, token Cloudflare Tunnel) yang di-generate independen
+oleh Ansible untuk cluster tersebut — tidak ada yang dibagi antar environment.
+
+**1. Buat overlay Kustomize baru** di `kubernetes/gitops/overlays/<env>/`,
+meniru `overlays/demo/` persis (3 file):
+
+```bash
+mkdir kubernetes/gitops/overlays/staging
+```
+
+- `kustomization.yaml` — `resources: [../../base]`, plus 2 `patches` di bawah.
+- `magento-base-url-patch.yaml` — patch `ConfigMap` yang meng-override
+  `MAGENTO_BASE_URL` ke domain environment baru.
+- `magento-ingressroute-patch.yaml` — patch `IngressRoute` yang meng-override
+  `Host()` match ke domain yang sama (harus konsisten dengan
+  `MAGENTO_BASE_URL` di atas).
+
+**2. Buat inventory Ansible baru** di `ansible/minikube/inventory/<env>/`:
+
+- `hosts.yml` — IP, user SSH, dan path private key untuk VM baru (lihat
+  `inventory/demo/hosts.yml` sebagai contoh).
+- `group_vars/minikube.yml` — salin dari `inventory/demo/group_vars/minikube.yml`,
+  lalu ubah **minimal** satu baris ini (paling penting — ini yang membuat
+  environment baru benar-benar terisolasi, bukan menimpa demo/testing):
+
+  ```yaml
+  fluxcd_git_path: ./kubernetes/gitops/overlays/staging
+  ```
+
+  Sesuaikan juga `minikube_cpus`/`minikube_memory`/`minikube_disk_size` kalau
+  spek VM baru berbeda dari demo. Sisanya (driver `none`, addon,
+  `minikube_enable_limited_swap`, dst.) sebaiknya tetap sama supaya perilaku
+  environment baru konsisten dan teruji — sesuai prinsip *parity* yang sudah
+  dipakai antara `demo` dan `testing`.
+
+**3. Jalankan provisioning** — sama persis seperti demo, cuma ganti nama
+inventory:
+
+```bash
+cd ansible/minikube
+ansible-playbook site.yml -i inventory/staging
+```
+
+**4. Sebelum benar-benar dipakai untuk staging/production**, tinjau ulang
+bagian [9. Known Issues, Limitation, dan Asumsi](#9-known-issues-limitation-dan-asumsi)
+— beberapa keputusan yang wajar untuk demo **tidak otomatis cocok** untuk
+tier yang lebih serius:
+
+- **Single replica** (Magento/MariaDB/Dragonfly) — pertimbangkan HA kalau
+  environment baru perlu tahan terhadap restart pod tunggal.
+- **Dragonfly tanpa persistence** — cukup untuk cache murni, tapi kalau
+  environment baru butuh session yang bertahan lewat restart, perlu
+  ditambah persistence atau replikasi.
+- **Traefik `websecure` masih sertifikat self-signed** — kalau environment
+  baru perlu diakses HTTPS langsung (bukan cuma lewat Cloudflare Tunnel),
+  pasang `cert-manager`/secret TLS asli dulu.
+- **Ganti semua placeholder** (`cloudflared-tunnel-token`, `ghcr-credentials`)
+  dengan token/kredensial asli sebelum environment benar-benar publik.
+- **Pertimbangkan SSH key terpisah** per environment (bukan berbagi satu key
+  seperti pola saat ini), terutama untuk production.

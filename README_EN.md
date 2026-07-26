@@ -268,3 +268,73 @@ Based on live testing during this session (2 vCPU / ~2.8 GiB RAM VM):
 
 Actual time can run longer depending on network speed (image pulls, apt
 package downloads) and the host's disk/CPU speed.
+
+## 11. Guide: Provisioning a New Environment (e.g. Staging/Production)
+
+This repo is designed so that adding a new environment means adding **one
+Kustomize overlay folder + one Ansible inventory folder** — without touching
+anything in the existing `demo`/`testing` setups. Each environment runs on
+its own VM, with its own Minikube cluster, and credentials (MariaDB,
+Dragonfly, Magento admin, Cloudflare Tunnel token) generated independently by
+Ansible for that cluster — nothing is shared across environments.
+
+**1. Create a new Kustomize overlay** at `kubernetes/gitops/overlays/<env>/`,
+mirroring `overlays/demo/` exactly (3 files):
+
+```bash
+mkdir kubernetes/gitops/overlays/staging
+```
+
+- `kustomization.yaml` — `resources: [../../base]`, plus the 2 `patches`
+  below.
+- `magento-base-url-patch.yaml` — a `ConfigMap` patch overriding
+  `MAGENTO_BASE_URL` to the new environment's domain.
+- `magento-ingressroute-patch.yaml` — an `IngressRoute` patch overriding the
+  `Host()` match to the same domain (must stay consistent with
+  `MAGENTO_BASE_URL` above).
+
+**2. Create a new Ansible inventory** at `ansible/minikube/inventory/<env>/`:
+
+- `hosts.yml` — the new VM's IP, SSH user, and private key path (see
+  `inventory/demo/hosts.yml` as an example).
+- `group_vars/minikube.yml` — copy from
+  `inventory/demo/group_vars/minikube.yml`, then change **at minimum** this
+  one line (the important one — this is what actually isolates the new
+  environment instead of overwriting demo/testing):
+
+  ```yaml
+  fluxcd_git_path: ./kubernetes/gitops/overlays/staging
+  ```
+
+  Also adjust `minikube_cpus`/`minikube_memory`/`minikube_disk_size` if the
+  new VM's specs differ from demo's. Everything else (the `none` driver,
+  addons, `minikube_enable_limited_swap`, etc.) should stay the same so the
+  new environment's behavior is consistent and already proven — the same
+  parity principle already used between `demo` and `testing`.
+
+**3. Run provisioning** — exactly the same as demo, just a different
+inventory name:
+
+```bash
+cd ansible/minikube
+ansible-playbook site.yml -i inventory/staging
+```
+
+**4. Before actually using this for staging/production**, revisit
+[9. Known Issues, Limitations, and Assumptions](#9-known-issues-limitations-and-assumptions)
+— several choices that are reasonable for a demo **don't automatically carry
+over** to a more serious tier:
+
+- **Single replica** (Magento/MariaDB/Dragonfly) — consider HA if the new
+  environment needs to survive a single pod restart without disruption.
+- **Dragonfly has no persistence** — fine for a pure cache, but if the new
+  environment needs sessions to survive a restart, add persistence or
+  replication.
+- **Traefik's `websecure` still uses a self-signed certificate** — if the new
+  environment needs direct HTTPS access (not just via Cloudflare Tunnel), set
+  up `cert-manager`/a real TLS secret first.
+- **Replace every placeholder** (`cloudflared-tunnel-token`,
+  `ghcr-credentials`) with real credentials before the environment goes
+  genuinely public.
+- **Consider a separate SSH key** per environment (rather than sharing one
+  key, the current pattern), especially for production.
