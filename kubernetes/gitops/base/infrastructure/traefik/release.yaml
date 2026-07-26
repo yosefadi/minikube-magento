@@ -14,7 +14,7 @@ spec:
       sourceRef:
         kind: HelmRepository
         name: traefik
-        namespace: infrastructure
+        namespace: traefik
       interval: 10m
   values:
     # Chart defaults to LoadBalancer (spec.type), which minikube has no

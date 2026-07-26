@@ -8,6 +8,15 @@ fluxcd_release_name: flux
 fluxcd_storage_release_name: flux-storage
 fluxcd_git_path_storage: ./kubernetes/gitops/base/infrastructure/openebs
 
+# Separate from the main Kustomization for the same reason as storage above:
+# Traefik's HelmRelease installs the IngressRoute CRD via helm-controller,
+# asynchronously from kustomize-controller applying the raw IngressRoute
+# manifest — in one Kustomization those race, and kustomize-controller's
+# dry-run can hit the CRD before helm-controller has registered it. This
+# Kustomization finishing (wait: true) is what the main one depends on.
+fluxcd_traefik_release_name: flux-traefik
+fluxcd_git_path_traefik: ./kubernetes/gitops/base/infrastructure/traefik
+
 fluxcd_git_url: "ssh://git@github.com/yosefadi/minikube-magento.git"
 fluxcd_git_branch: main
 fluxcd_git_path: ./kubernetes/gitops

@@ -117,6 +117,26 @@
       --timeout=300s
   changed_when: false
 
+- name: Render and apply Traefik Kustomization CRD
+  ansible.builtin.template:
+    src: kustomization-traefik.yaml.j2
+    dest: /tmp/fluxcd-kustomization-traefik.yaml
+    mode: "0644"
+
+- name: Apply Traefik Kustomization CRD
+  ansible.builtin.command:
+    cmd: kubectl apply -f /tmp/fluxcd-kustomization-traefik.yaml
+  register: __fluxcd_kustomize_traefik_apply
+  changed_when: '"unchanged" not in __fluxcd_kustomize_traefik_apply.stdout'
+
+- name: Wait for Traefik Kustomization to be ready
+  ansible.builtin.command:
+    cmd: >
+      kubectl wait --for=condition=ready kustomization/{{ fluxcd_traefik_release_name }}
+      --namespace {{ fluxcd_namespace }}
+      --timeout=300s
+  changed_when: false
+
 - name: Render and apply main Kustomization CRD
   ansible.builtin.template:
     src: kustomization.yaml.j2
@@ -152,6 +172,7 @@
       Repository: {{ fluxcd_git_url }}
       Branch: {{ fluxcd_git_branch }}
       Storage Kustomization: {{ fluxcd_storage_release_name }} → {{ fluxcd_git_path_storage }}
+      Traefik Kustomization: {{ fluxcd_traefik_release_name }} → {{ fluxcd_git_path_traefik }}
       Main Kustomization: {{ fluxcd_release_name }} → {{ fluxcd_git_path }}
       Namespace: {{ fluxcd_namespace }}
       Check status with: kubectl get gitrepository,kustomization -n {{ fluxcd_namespace }}
