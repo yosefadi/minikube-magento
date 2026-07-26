@@ -24,11 +24,28 @@ spec:
     service:
       spec:
         type: NodePort
+    # Without this, Traefik ignores the X-Forwarded-Proto cloudflared already
+    # sets (reflecting the real client's scheme at the Cloudflare edge) and
+    # overwrites it with "http" — reflecting only this specific hop, which is
+    # always unencrypted since cloudflared -> Traefik never uses TLS. Magento
+    # then sees an "insecure" request and redirects to the https version of
+    # the exact same URL, forever — confirmed live, this is what caused the
+    # ERR_TOO_MANY_REDIRECTS loop once the tunnel was pointed at Traefik
+    # instead of straight at the magento Service. 10.244.0.0/16 is this
+    # cluster's pod CIDR (matches every pod IP observed all session), so
+    # this trusts forwarded headers from any in-cluster source, including
+    # cloudflared's pod.
     ports:
       web:
         nodePort: 30080
+        forwardedHeaders:
+          trustedIPs:
+            - 10.244.0.0/16
       websecure:
         nodePort: 30443
+        forwardedHeaders:
+          trustedIPs:
+            - 10.244.0.0/16
       # traefik.expose.default stays false (the chart default) — its own
       # values.yaml explicitly warns "you SHOULD NOT expose the traefik
       # port on production deployments... use kubectl port-forward or
