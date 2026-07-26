@@ -1,8 +1,8 @@
 ---
-# Testing inventory — diverged from demo because testing uses --driver=none
-# while demo uses the default (docker).  The resource values below should still
-# match demo's as closely as possible so this environment can rehearse what the
-# demo host will get (driver choice being the deliberate exception).
+# Testing inventory — kept in parity with inventory/demo/group_vars/minikube.yml
+# (aside from this header and fluxcd_git_path, which is necessarily
+# environment-specific) so this environment actually rehearses what the demo
+# host will get.
 #
 # Sized for a host with ~3.9-4.0 GiB RAM / 2 vCPUs / enough disk for 50g (both
 # the testing Hyper-V VM and the demo Linode box were confirmed to fit this).

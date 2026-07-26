@@ -1,0 +1,92 @@
+flowchart TB
+    User(("Pengguna"))
+
+    subgraph CICD["CI/CD (GitHub Actions)"]
+        direction LR
+        Push["git push<br/>magento/**"]
+        Kaniko["Kaniko build<br/>final-php / final-nginx"]
+        GHCR[("GHCR<br/>magento-php / magento-nginx images")]
+        UpdateTag["Update image tag in<br/>deployment.yaml + push"]
+        Push --> Kaniko --> GHCR
+        Kaniko --> UpdateTag
+    end
+
+    subgraph Repo["GitHub Repo"]
+        GitopsDir[("kubernetes/gitops/overlays/demo")]
+    end
+
+    UpdateTag -.->|commit| GitopsDir
+
+    subgraph ControlMachine["Mesin Kontrol"]
+        Ansible["ansible-playbook site.yml<br/>-i inventory/demo"]
+    end
+
+    subgraph VM["VM Demo (Ubuntu 24.04, Linode)"]
+
+        subgraph Provisioning["Provisioning host-level (Ansible roles)"]
+            direction LR
+            DockerCri["Docker + cri-dockerd"]
+            Tools["kubectl / helm / flux-cli / k9s"]
+            MinikubeBin["Minikube start<br/>--driver=none (kubelet di host)"]
+        end
+
+        Ansible ==>|"install & configure"| Provisioning
+        Ansible ==>|"generate credentials<br/>(idempotent, tidak lewat git)"| Secrets
+
+        subgraph Secrets["Secrets (dibuat langsung ke cluster)"]
+            direction LR
+            SecMaria[("mariadb-credentials")]
+            SecDragon[("dragonfly-credentials")]
+            SecMagento[("magento-credentials")]
+        end
+
+        subgraph FluxSystem["namespace: flux-system"]
+            GitRepo["GitRepository"]
+            KustoStorage["Kustomization<br/>flux-storage (OpenEBS)"]
+            KustoTraefik["Kustomization<br/>flux-traefik (Traefik + CRD)"]
+            KustoMain["Kustomization<br/>flux (utama: Magento, DB, dll.)"]
+
+            GitRepo --> KustoStorage
+            GitRepo --> KustoTraefik
+            KustoStorage -.->|dependsOn| KustoMain
+            KustoTraefik -.->|dependsOn| KustoMain
+        end
+
+        Ansible ==>|"install FluxCD (Helm)"| FluxSystem
+        GitopsDir -->|"pull via SSH deploy key"| GitRepo
+
+        subgraph InfraNS["namespace: infrastructure"]
+            MariaDB[("MariaDB 12.3<br/>StatefulSet + PVC")]
+            OpenSearch[("OpenSearch<br/>HelmRelease")]
+            Dragonfly[("DragonflyDB v1.39.0<br/>cache + session, tanpa PVC")]
+            TraefikPod["Traefik v41.x<br/>NodePort 30080 / 30443"]
+            CloudflaredPod["cloudflared<br/>Deployment"]
+        end
+
+        subgraph AppsNS["namespace: apps"]
+            IngressRoute["IngressRoute<br/>Host: demo-magento.yosefadi.my.id"]
+            MagentoSvc["Service: magento<br/>ClusterIP :8080"]
+            Nginx["Kontainer nginx<br/>static assets + reverse proxy"]
+            PhpFpm["Kontainer php-fpm<br/>Magento 2.4.9 / PHP 8.5"]
+            PVCs[("PVC: magento-etc,<br/>pub/static, pub/media")]
+
+            IngressRoute --> MagentoSvc --> Nginx
+            Nginx <-->|"fastcgi :9000<br/>loopback, 1 pod"| PhpFpm
+            PhpFpm --- PVCs
+            Nginx --- PVCs
+        end
+
+        KustoMain -.->|applies| InfraNS
+        KustoMain -.->|applies| AppsNS
+
+        PhpFpm -->|":3306"| MariaDB
+        PhpFpm -->|":9200"| OpenSearch
+        PhpFpm -->|":6379<br/>cache/session/full_page"| Dragonfly
+
+        CloudflaredPod -->|"NetworkPolicy allow<br/>:8080"| MagentoSvc
+        TraefikPod -->|"NetworkPolicy allow<br/>:8080"| MagentoSvc
+    end
+
+    User -->|"https://demo-magento.yosefadi.my.id<br/>(TLS di edge Cloudflare)"| CFEdge(("Cloudflare Edge"))
+    CFEdge -->|"Tunnel (outbound dari VM)"| CloudflaredPod
+    User -->|"http://ip-node:30080<br/>Host header cocok"| TraefikPod

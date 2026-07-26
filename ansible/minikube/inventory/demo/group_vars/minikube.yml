@@ -1,20 +1,21 @@
 ---
 # Keep this file's values matching inventory/testing/group_vars/minikube.yml
-# as closely as possible (aside from this header) — testing exists to
-# rehearse what demo will get. The one deliberate exception is
-# minikube_driver: testing pins --driver=none while demo stays on the role
-# default (docker), so don't "fix" that divergence back to parity.
+# as closely as possible (aside from this header and fluxcd_git_path, which
+# is necessarily environment-specific) — testing exists to rehearse what
+# demo will get.
 #
 # Sized for a host with ~3.9-4.0 GiB RAM / 2 vCPUs / enough disk for 50g (both
 # the demo Linode box and the testing Hyper-V VM were confirmed to fit this).
 # The role default of minikube_memory: 4096 would exceed this host's real
 # ~3915 MB total and hit minikube's MK_USAGE preflight hard-fail — this is
 # the fix for that, not just parity for its own sake.
+minikube_driver: none
 minikube_cpus: 2
 minikube_memory: 2800
 minikube_disk_size: 50g
 minikube_extra_args:
   - --force
+  - --extra-config=apiserver.feature-gates=ExtendWebSocketsToKubelet=false
 
 # Leave swap on and have Kubernetes actually manage it (KEP-2400) instead of
 # either the unmanaged fallback minikube uses by default, or disabling it.
