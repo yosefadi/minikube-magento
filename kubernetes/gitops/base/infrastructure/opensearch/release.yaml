@@ -35,6 +35,7 @@ spec:
     opensearchJavaOpts: "-Xms256m -Xmx256m"
     persistence:
       size: 5Gi
+      storageClass: openebs-hostpath
     resources:
       requests:
         cpu: 300m

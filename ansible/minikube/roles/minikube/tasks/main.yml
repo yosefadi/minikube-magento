@@ -15,18 +15,15 @@
   loop:
     - "{{ minikube_home }}/.minikube"
     - "{{ minikube_home }}/.kube"
-    - /var/lib/minikube/hostpath-provisioner
-    - /var/lib/minikube/hostpath_pv
 
-- name: Symlink hostpath provisioner directories to persistent storage
+- name: Remove built-in storage-provisioner symlinks that conflict with OpenEBS
   ansible.builtin.file:
-    src: "{{ item.src }}"
-    dest: "{{ item.dest }}"
-    state: link
-    force: true
+    path: "{{ item }}"
+    state: absent
   loop:
-    - { src: '/var/lib/minikube/hostpath-provisioner', dest: '/tmp/hostpath-provisioner' }
-    - { src: '/var/lib/minikube/hostpath_pv', dest: '/tmp/hostpath_pv' }
+    - /tmp/hostpath-provisioner
+    - /tmp/hostpath_pv
+  failed_when: false
 
 - name: Check the installed minikube version
   ansible.builtin.command: "{{ minikube_bin }} version --short"
@@ -188,6 +185,15 @@
       {{ (minikube_addons_state.stdout | from_json) | dict2items
          | selectattr('value.Status', 'equalto', 'enabled')
          | map(attribute='key') | list }}
+
+- name: Disable minikube's built-in storage-provisioner
+  ansible.builtin.command: "{{ minikube_bin }} addons disable storage-provisioner"
+  environment:
+    MINIKUBE_IN_STYLE: "false"
+  when: >-
+    'storage-provisioner' in (minikube_addons_state.stdout | from_json)
+    and (minikube_addons_state.stdout | from_json)['storage-provisioner'].Status == 'enabled'
+  changed_when: true
 
 - name: Read the minikube kubeconfig
   ansible.builtin.slurp:

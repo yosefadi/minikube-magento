@@ -6,6 +6,7 @@ metadata:
   namespace: apps
 spec:
   accessModes: ["ReadWriteOnce"]
+  storageClassName: openebs-hostpath
   resources:
     requests:
       storage: 1Gi
@@ -17,6 +18,7 @@ metadata:
   namespace: apps
 spec:
   accessModes: ["ReadWriteOnce"]
+  storageClassName: openebs-hostpath
   resources:
     requests:
       storage: 1Gi
@@ -28,6 +30,7 @@ metadata:
   namespace: apps
 spec:
   accessModes: ["ReadWriteOnce"]
+  storageClassName: openebs-hostpath
   resources:
     requests:
       storage: 1Gi

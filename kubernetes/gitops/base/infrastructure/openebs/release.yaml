@@ -1,0 +1,26 @@
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: openebs
+  namespace: openebs
+spec:
+  interval: 10m
+  timeout: 10m
+  chart:
+    spec:
+      chart: openebs
+      version: "4.x"
+      sourceRef:
+        kind: HelmRepository
+        name: openebs
+        namespace: infrastructure
+      interval: 10m
+  values:
+    engines:
+      replicated:
+        mayastor:
+          enabled: false
+    localpv:
+      hostpath:
+        basePath: /var/openebs/local

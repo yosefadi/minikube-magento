@@ -8,7 +8,6 @@ minikube_disk_size: 30g
 minikube_nodes: 1
 minikube_addons:
   - default-storageclass
-  - storage-provisioner
 minikube_extra_args: []
 
 # Set to false to install the binary + unit without bringing a cluster up
