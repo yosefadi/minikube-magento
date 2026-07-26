@@ -20,6 +20,14 @@
     update_cache: true
   changed_when: false
 
+# Lives here rather than in the common role's package list because it ships
+# from the Kubernetes apt repo just registered above — installing it any
+# earlier fails outright on a host that's never run this repo before.
+- name: Install cri-tools
+  ansible.builtin.apt:
+    name: cri-tools
+    state: present
+
 - name: Determine the newest kubectl version in this apt channel
   ansible.builtin.command: apt-cache policy kubectl
   register: kubectl_apt_policy
@@ -40,9 +48,14 @@
     kubectl_candidate_version: "{{ kubectl_apt_policy.stdout | regex_search('Candidate: (\\S+)', '\\1') | first }}"
   block:
     - name: Release any existing kubectl version hold
-      # Otherwise a channel bump (kubectl_apt_channel) can't move an
-      # already-installed kubectl forward — apt just sees it as "present" and
-      # leaves it alone, silently stranding it on the old minor version.
+      # Only when kubectl's actually installed already — dpkg has no
+      # selection record at all for a package it's never seen, so this
+      # fails outright ("Failed to find package") on a host that's never
+      # had kubectl before. Otherwise, a channel bump (kubectl_apt_channel)
+      # on an existing install couldn't move it forward — apt just sees it
+      # as "present" and leaves it alone, silently stranding it on the old
+      # minor version.
+      when: kubectl_installed_version.stdout | default('') | length > 0
       ansible.builtin.dpkg_selections:
         name: kubectl
         selection: install

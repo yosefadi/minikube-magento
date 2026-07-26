@@ -21,11 +21,21 @@
          if cri_dockerd_version == 'latest' else cri_dockerd_version }}
 
 - name: Extract the installed cri-dockerd version
+  # regex_search with a single capture group ('\1') already returns a plain
+  # string, not a list — the `| first` here was always wrong, silently
+  # taking just the first *character* of the version even when cri-dockerd
+  # was already installed (breaking the idempotency check below without
+  # erroring). It only became a hard crash on a host that's never had
+  # cri-dockerd before: empty stdout means no regex match, regex_search
+  # returns None, and `None | first` throws instead of returning a stray
+  # character. `default('', true)` — the `true` matters, since plain
+  # `default('')` only substitutes for Jinja's Undefined, not an actual
+  # None value like this.
   ansible.builtin.set_fact:
     cri_dockerd_installed_version: >-
       {{ (cri_dockerd_installed.stdout | default(''))
          | regex_search('cri-dockerd\s+(\S+)', '\1')
-         | first | default('') }}
+         | default('', true) }}
 
 - name: Install cri-dockerd
   when: cri_dockerd_target_version not in ('v' ~ cri_dockerd_installed_version) and cri_dockerd_target_version != cri_dockerd_version

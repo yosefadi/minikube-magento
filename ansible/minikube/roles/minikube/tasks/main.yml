@@ -113,7 +113,18 @@
       changed_when: true
 
 - name: Enable managed LimitedSwap kubelet behavior
-  when: minikube_enable_limited_swap | bool
+  # --driver=none only: that's the one mode where kubelet runs directly on
+  # the host, so /var/lib/kubelet/config.yaml genuinely exists there to
+  # patch. --driver=docker runs kubelet *inside* the minikube node
+  # container — this path never exists on the host in that mode, and this
+  # whole block fails outright ("Path ... does not exist!") if attempted.
+  # Confirmed live on a docker-driver host that had never hit this code
+  # path before. Managed swap for the docker driver would need a different
+  # mechanism (e.g. `minikube start --extra-config=kubelet...`, applied
+  # inside the container) — not implemented here yet, so docker-driver
+  # hosts currently fall back to minikube's own default (unmanaged) swap
+  # handling rather than KEP-2400 LimitedSwap.
+  when: minikube_enable_limited_swap | bool and minikube_driver == 'none'
   block:
     - name: Check whether LimitedSwap is already configured
       ansible.builtin.command:

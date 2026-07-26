@@ -1,11 +1,17 @@
 ---
+# cri-tools deliberately isn't here — it ships from the Kubernetes apt repo,
+# which the kubectl role doesn't register until after this role runs.
+# Installing it there (right after that repo is added) instead of here is
+# what makes it actually installable on a host that's never run this
+# playbook before — confirmed live: installing it here fails outright with
+# "No package matching 'cri-tools' is available" on a genuinely fresh host,
+# masked on hosts that already had the repo registered from an earlier run.
 common_base_packages:
   - acl
   - apt-transport-https
   - ca-certificates
   - conntrack
   - containernetworking-plugins
-  - cri-tools
   - curl
   - gnupg
   - jq
