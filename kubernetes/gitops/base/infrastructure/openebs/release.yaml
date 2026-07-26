@@ -18,6 +18,11 @@ spec:
       interval: 10m
   values:
     engines:
+      local:
+        lvm:
+          enabled: false
+        zfs:
+          enabled: false
       replicated:
         mayastor:
           enabled: false
