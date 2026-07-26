@@ -29,6 +29,16 @@ spec:
         nodePort: 30080
       websecure:
         nodePort: 30443
+      # traefik.expose.default stays false (the chart default) — its own
+      # values.yaml explicitly warns "you SHOULD NOT expose the traefik
+      # port on production deployments... use kubectl port-forward or
+      # create a secure ingress" for this port (8080, dashboard/API).
+      # Deliberately not exposed on the public NodePort service here.
+    # api.dashboard is already the chart default (true) — what's off by
+    # default is the actual route to it.
+    ingressRoute:
+      dashboard:
+        enabled: true
     resources:
       requests:
         cpu: 100m
