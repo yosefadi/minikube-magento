@@ -67,7 +67,7 @@ ringkasan apa yang sebenarnya terjadi:
    di `<ip-node>:30080` (HTTP) atau `:30443` (HTTPS, sertifikat self-signed
    bawaan Traefik selama belum ada `cert-manager`/secret TLS asli).
 
-## 4. Deployment dari Awal hingga Aplikasi Siap
+## 4. Deployment dari Awal hingga Aplikasi Berjalan
 
 ```bash
 git clone git@github.com:yosefadi/minikube-magento.git
@@ -86,7 +86,7 @@ Urutan yang dijalankan playbook (`site.yml`):
 3. `docker`, `cri-dockerd` — runtime kontainer + shim CRI.
 4. `minikube` — start cluster, atur addon dan StorageClass default.
 5. `infrastructure-secrets` — generate credential MariaDB & Dragonfly (namespace
-   `infrastructure`), *idempotent*: rerun tidak akan meng-generate ulang kalau
+   `infrastructure`), *idempotent*: jika dijalankan ulang tidak akan mengganti kalau
    secret sudah ada.
 6. `apps-secrets` — salin credential DB/Dragonfly ke namespace `apps`, generate
    password admin Magento (juga idempotent).
@@ -326,5 +326,53 @@ tier yang lebih serius:
   pasang `cert-manager`/secret TLS asli dulu.
 - **Ganti semua placeholder** (`cloudflared-tunnel-token`, `ghcr-credentials`)
   dengan token/kredensial asli sebelum environment benar-benar publik.
-- **Pertimbangkan SSH key terpisah** per environment (bukan berbagi satu key
-  seperti pola saat ini), terutama untuk production.
+
+## 12. Akses untuk Reviewer
+
+VM demo saat ini ada di **`152.228.200.13`**. VM yang diberikan sebelumnya
+sudah digunakan oleh orang lain sehingga saya berinisiatif untuk menggunakan
+VPS pribadi dan tidak menggunakan host **`172.104.62.55`** Reviewer bisa 
+login lewat SSH dengan private key `linode_vm` yang sudah dibagikan.
+
+```bash
+ssh -i <path-ke-private-key>/linode_vm ubuntu@152.228.200.13
+```
+
+Reviewer **tidak** memiliki file kubeconfig — file itu (`output/kubectl-demo.yaml`)
+cuma dibuat di komputer/PC kontrol yang menjalankan `ansible-playbook site.yml`
+(punya operator/yosef, tidak disalin otomatis kemana-mana). Ada dua cara untuk
+tetap bisa menjalankan `kubectl` untuk verifikasi:
+
+**Opsi A — jalankan `kubectl` langsung di VM (disarankan, paling cepat)**
+
+Karena Minikube di VM ini pakai `--driver=none`, kubelet berjalan langsung di
+host dan kubeconfig root sudah tersedia di VM itu sendiri, tidak perlu
+disalin kemana-mana:
+
+```bash
+ssh -i <path-ke-private-key>/linode_vm ubuntu@152.228.200.13
+sudo kubectl --kubeconfig=/root/.kube/config get pods -n apps -n infrastructure
+sudo kubectl --kubeconfig=/root/.kube/config exec -n apps deploy/magento -c php-fpm -- bin/magento cache:status
+```
+
+(`sudo` diperlukan karena `/root/.kube/config` cuma bisa dibaca root — ini
+bawaan `minikube start --driver=none`, bukan hardening tambahan dari repo
+ini.)
+
+**Opsi B — salin kubeconfig ke mesin sendiri**
+
+Kalau reviewer ingin menjalankan `kubectl` dari laptop sendiri (bukan di
+dalam VM lewat SSH):
+
+```bash
+ssh -i <path-ke-private-key>/linode_vm ubuntu@152.228.200.13 "sudo cat /root/.kube/config" > ./kubeconfig-demo.yaml
+export KUBECONFIG=./kubeconfig-demo.yaml
+kubectl get pods -n apps -n infrastructure
+```
+
+> Catatan: field `server:` di dalam kubeconfig itu menunjuk ke IP VM yang
+> sama (`152.228.200.13`). Kalau di kemudian hari IP VM berubah (VM di-reset
+> atau diganti) tapi file kubeconfig lama masih dipakai, `kubectl` akan gagal
+> connect ("connection refused"/timeout) — cek dan sesuaikan manual field
+> `server:` ke IP yang aktif saat itu, atau ambil ulang kubeconfig-nya lewat
+> perintah di atas.

@@ -338,3 +338,53 @@ over** to a more serious tier:
   genuinely public.
 - **Consider a separate SSH key** per environment (rather than sharing one
   key, the current pattern), especially for production.
+
+## 12. Reviewer Access
+
+The demo VM currently lives at **`152.228.200.13`**. Reviewers can log in via
+SSH using the shared `linode_vm` private key (path relative to the repo
+root: `ssh/linode_vm`):
+
+```bash
+ssh -i ssh/linode_vm ubuntu@152.228.200.13
+```
+
+Reviewers do **not** have a kubeconfig file — that file
+(`output/kubectl-demo.yaml`) is only generated on the control machine that
+runs `ansible-playbook site.yml` (the operator's machine), it isn't copied
+anywhere automatically. There are two ways to still run `kubectl` for
+verification:
+
+**Option A — run `kubectl` directly on the VM (recommended, fastest)**
+
+Since Minikube on this VM uses `--driver=none`, kubelet runs directly on the
+host and root's kubeconfig is already available on the VM itself — nothing
+needs to be copied anywhere:
+
+```bash
+ssh -i ssh/linode_vm ubuntu@152.228.200.13
+sudo kubectl --kubeconfig=/root/.kube/config get pods -n apps -n infrastructure
+sudo kubectl --kubeconfig=/root/.kube/config exec -n apps deploy/magento -c php-fpm -- bin/magento cache:status
+```
+
+(`sudo` is required because `/root/.kube/config` is only readable by root —
+this is `minikube start --driver=none`'s own default, not extra hardening
+added by this repo.)
+
+**Option B — copy the kubeconfig to your own machine**
+
+If a reviewer wants to run `kubectl` from their own laptop instead (rather
+than inside the VM over SSH):
+
+```bash
+ssh -i ssh/linode_vm ubuntu@152.228.200.13 "sudo cat /root/.kube/config" > ./kubeconfig-demo.yaml
+export KUBECONFIG=./kubeconfig-demo.yaml
+kubectl get pods -n apps -n infrastructure
+```
+
+> Note: the `server:` field inside that kubeconfig points at this same VM IP
+> (`152.228.200.13`). If the VM's IP ever changes later (VM reset or
+> replaced) while an old kubeconfig file is still around, `kubectl` will fail
+> to connect ("connection refused"/timeout) — check and manually update the
+> `server:` field to the currently active IP, or just re-fetch the kubeconfig
+> with the command above.
