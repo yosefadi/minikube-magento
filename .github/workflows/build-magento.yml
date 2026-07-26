@@ -4,7 +4,7 @@ on:
   push:
     branches: [main]
     tags: ['v*']
-    paths: ['magento/**']
+    paths: ['magento/**', '.github/workflows/**']
 
 env:
   REGISTRY: ghcr.io
