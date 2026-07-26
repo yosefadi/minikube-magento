@@ -4,3 +4,4 @@ resources:
   - ../../base
 patches:
   - path: magento-base-url-patch.yaml
+  - path: magento-ingressroute-patch.yaml

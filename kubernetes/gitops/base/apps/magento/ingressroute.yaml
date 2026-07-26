@@ -1,0 +1,26 @@
+---
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: magento
+  namespace: apps
+spec:
+  # web (NodePort 30080) and websecure (NodePort 30443) — this is a separate,
+  # direct entry point via the NodePort, independent of the public path
+  # (Cloudflare Tunnel terminates TLS at the edge before traffic ever reaches
+  # the cluster). `tls: {}` with no secretName/certResolver makes websecure
+  # actually terminate TLS here — otherwise a router bound to websecure but
+  # with no `tls` section just tries to parse the TLS handshake as plain
+  # HTTP and breaks — using Traefik's own default self-signed cert as a
+  # placeholder until a real one is configured (cert-manager, or a manually
+  # created TLS secret referenced by secretName).
+  entryPoints:
+    - web
+    - websecure
+  routes:
+    - kind: Rule
+      match: Host(`shop.example.com`)
+      services:
+        - name: magento
+          port: 8080
+  tls: {}

@@ -1,0 +1,37 @@
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: traefik
+  namespace: traefik
+spec:
+  interval: 10m
+  timeout: 5m
+  chart:
+    spec:
+      chart: traefik
+      version: "41.x"
+      sourceRef:
+        kind: HelmRepository
+        name: traefik
+        namespace: infrastructure
+      interval: 10m
+  values:
+    # Chart defaults to LoadBalancer (spec.type), which minikube has no
+    # cloud controller to satisfy — it'd sit in <pending> forever. NodePort
+    # is reachable directly at <node-ip>:<nodePort>, no external
+    # provisioner needed.
+    service:
+      spec:
+        type: NodePort
+    ports:
+      web:
+        nodePort: 30080
+      websecure:
+        nodePort: 30443
+    resources:
+      requests:
+        cpu: 100m
+        memory: 64Mi
+      limits:
+        memory: 128Mi

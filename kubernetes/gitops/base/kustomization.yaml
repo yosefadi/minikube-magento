@@ -4,8 +4,11 @@ resources:
   - infrastructure/namespace.yaml
   - infrastructure/helm-repositories/opensearch.yaml
   - infrastructure/helm-repositories/stakater.yaml
+  - infrastructure/helm-repositories/traefik.yaml
   - infrastructure/reloader/namespace.yaml
   - infrastructure/reloader/release.yaml
+  - infrastructure/traefik/namespace.yaml
+  - infrastructure/traefik/release.yaml
   - infrastructure/mariadb/statefulset.yaml
   - infrastructure/mariadb/service.yaml
   - infrastructure/opensearch/release.yaml
@@ -24,6 +27,7 @@ resources:
   - apps/magento/service.yaml
   - apps/magento/pvc.yaml
   - apps/magento/deployment.yaml
+  - apps/magento/ingressroute.yaml
   - apps/networkpolicies/default-deny-ingress.yaml
   - apps/networkpolicies/default-deny-egress.yaml
   - apps/networkpolicies/allow-egress-to-kube-dns.yaml
@@ -31,3 +35,4 @@ resources:
   - apps/networkpolicies/allow-egress-to-mariadb.yaml
   - apps/networkpolicies/allow-egress-to-opensearch.yaml
   - apps/networkpolicies/allow-egress-to-dragonfly.yaml
+  - apps/networkpolicies/allow-ingress-from-traefik.yaml

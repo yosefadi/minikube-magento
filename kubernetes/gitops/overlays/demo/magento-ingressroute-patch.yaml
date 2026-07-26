@@ -1,0 +1,16 @@
+---
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: magento
+  namespace: apps
+spec:
+  entryPoints:
+    - web
+    - websecure
+  routes:
+    - kind: Rule
+      match: Host(`demo-magento.yosefadi.my.id`)
+      services:
+        - name: magento
+          port: 8080
