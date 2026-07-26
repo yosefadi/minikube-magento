@@ -5,6 +5,9 @@ fluxcd_chart_name: flux2
 fluxcd_chart_version: 2.19.0
 fluxcd_release_name: flux
 
+fluxcd_storage_release_name: flux-storage
+fluxcd_git_path_storage: ./kubernetes/gitops/base/infrastructure/openebs
+
 fluxcd_git_url: "ssh://git@github.com/yosefadi/minikube-magento.git"
 fluxcd_git_branch: main
 fluxcd_git_path: ./kubernetes/gitops

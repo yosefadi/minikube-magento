@@ -4,9 +4,6 @@ resources:
   - infrastructure/namespace.yaml
   - infrastructure/helm-repositories/opensearch.yaml
   - infrastructure/helm-repositories/stakater.yaml
-  - infrastructure/helm-repositories/openebs.yaml
-  - infrastructure/openebs/namespace.yaml
-  - infrastructure/openebs/release.yaml
   - infrastructure/reloader/namespace.yaml
   - infrastructure/reloader/release.yaml
   - infrastructure/mariadb/statefulset.yaml

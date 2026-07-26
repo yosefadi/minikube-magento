@@ -14,7 +14,7 @@ spec:
       sourceRef:
         kind: HelmRepository
         name: openebs
-        namespace: infrastructure
+        namespace: openebs
       interval: 10m
   values:
     engines:

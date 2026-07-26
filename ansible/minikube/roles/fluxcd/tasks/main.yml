@@ -97,13 +97,33 @@
   register: __fluxcd_gitrepo_apply
   changed_when: '"unchanged" not in __fluxcd_gitrepo_apply.stdout'
 
-- name: Render and apply Kustomization CRD
+- name: Render and apply storage Kustomization CRD
+  ansible.builtin.template:
+    src: kustomization-storage.yaml.j2
+    dest: /tmp/fluxcd-kustomization-storage.yaml
+    mode: "0644"
+
+- name: Apply storage Kustomization CRD
+  ansible.builtin.command:
+    cmd: kubectl apply -f /tmp/fluxcd-kustomization-storage.yaml
+  register: __fluxcd_kustomize_storage_apply
+  changed_when: '"unchanged" not in __fluxcd_kustomize_storage_apply.stdout'
+
+- name: Wait for storage Kustomization to be ready
+  ansible.builtin.command:
+    cmd: >
+      kubectl wait --for=condition=ready kustomization/{{ fluxcd_storage_release_name }}
+      --namespace {{ fluxcd_namespace }}
+      --timeout=300s
+  changed_when: false
+
+- name: Render and apply main Kustomization CRD
   ansible.builtin.template:
     src: kustomization.yaml.j2
     dest: /tmp/fluxcd-kustomization.yaml
     mode: "0644"
 
-- name: Apply Kustomization CRD
+- name: Apply main Kustomization CRD
   ansible.builtin.command:
     cmd: kubectl apply -f /tmp/fluxcd-kustomization.yaml
   register: __fluxcd_kustomize_apply
@@ -117,12 +137,12 @@
       --timeout=120s
   changed_when: false
 
-- name: Wait for Kustomization to be ready
+- name: Wait for main Kustomization to be ready
   ansible.builtin.command:
     cmd: >
       kubectl wait --for=condition=ready kustomization/{{ fluxcd_release_name }}
       --namespace {{ fluxcd_namespace }}
-      --timeout=120s
+      --timeout=300s
   changed_when: false
 
 - name: Display FluxCD installation summary
@@ -131,6 +151,7 @@
       FluxCD installed successfully!
       Repository: {{ fluxcd_git_url }}
       Branch: {{ fluxcd_git_branch }}
-      Path: {{ fluxcd_git_path }}
+      Storage Kustomization: {{ fluxcd_storage_release_name }} → {{ fluxcd_git_path_storage }}
+      Main Kustomization: {{ fluxcd_release_name }} → {{ fluxcd_git_path }}
       Namespace: {{ fluxcd_namespace }}
       Check status with: kubectl get gitrepository,kustomization -n {{ fluxcd_namespace }}
