@@ -1,0 +1,40 @@
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: opensearch
+  namespace: infrastructure
+spec:
+  interval: 10m
+  chart:
+    spec:
+      chart: opensearch
+      version: "3.x"
+      sourceRef:
+        kind: HelmRepository
+        name: opensearch
+        namespace: infrastructure
+      interval: 10m
+  values:
+    image:
+      tag: "2"
+    singleNode: true
+    replicas: 1
+    config:
+      opensearch.yml: |
+        cluster.name: opensearch-cluster
+        network.host: 0.0.0.0
+        discovery.type: single-node
+        plugins.security.disabled: true
+    extraEnvs:
+      - name: DISABLE_INSTALL_DEMO_CONFIG
+        value: "true"
+      - name: DISABLE_SECURITY_PLUGIN
+        value: "true"
+    opensearchJavaOpts: "-Xms256m -Xmx256m"
+    persistence:
+      size: 5Gi
+    resources:
+      requests:
+        cpu: 300m
+        memory: 256Mi

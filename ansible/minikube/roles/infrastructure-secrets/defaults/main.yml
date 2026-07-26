@@ -1,0 +1,10 @@
+---
+infrastructure_namespace: infrastructure
+
+mariadb_secret_name: mariadb-credentials
+mariadb_user: magento
+mariadb_database: magento
+mariadb_password_length: 24
+
+cloudflared_secret_name: cloudflared-tunnel-token
+cloudflared_placeholder_token: CHANGE_ME_REPLACE_WITH_YOUR_CLOUDFLARE_TUNNEL_TOKEN

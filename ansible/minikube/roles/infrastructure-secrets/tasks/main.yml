@@ -1,0 +1,61 @@
+---
+- name: Ensure infrastructure namespace exists
+  ansible.builtin.shell:
+    cmd: kubectl create namespace {{ infrastructure_namespace }} --dry-run=client -o yaml | kubectl apply -f -
+  changed_when: false
+
+- name: Generate MariaDB credentials
+  ansible.builtin.set_fact:
+    __mariadb_root_password: "{{ lookup('password', '/dev/null chars=ascii_letters,digits length=' ~ mariadb_password_length | string) }}"
+    __mariadb_user: "{{ mariadb_user }}"
+    __mariadb_database: "{{ mariadb_database }}"
+    __mariadb_password: "{{ lookup('password', '/dev/null chars=ascii_letters,digits length=' ~ mariadb_password_length | string) }}"
+
+- name: Create or update MariaDB credentials secret
+  ansible.builtin.shell:
+    cmd: >
+      kubectl create secret generic {{ mariadb_secret_name }}
+      --namespace {{ infrastructure_namespace }}
+      --from-literal=root-password='{{ __mariadb_root_password }}'
+      --from-literal=magento-user='{{ __mariadb_user }}'
+      --from-literal=magento-password='{{ __mariadb_password }}'
+      --from-literal=magento-database='{{ __mariadb_database }}'
+      --dry-run=client -o yaml | kubectl apply -f -
+  register: __mariadb_secret_apply
+  changed_when: '"unchanged" not in __mariadb_secret_apply.stdout'
+
+- name: Show MariaDB credentials
+  ansible.builtin.debug:
+    msg:
+      - "MariaDB credentials stored in secret '{{ mariadb_secret_name }}' (namespace: {{ infrastructure_namespace }})"
+      - "  root-password: {{ __mariadb_root_password }}"
+      - "  magento-user: {{ __mariadb_user }}"
+      - "  magento-password: {{ __mariadb_password }}"
+      - "  magento-database: {{ __mariadb_database }}"
+
+- name: Check if cloudflared tunnel token secret exists
+  ansible.builtin.shell:
+    cmd: kubectl get secret {{ cloudflared_secret_name }} --namespace {{ infrastructure_namespace }} -o name 2>&1 || true
+  register: __cloudflared_secret_check
+  changed_when: false
+
+- name: Create placeholder cloudflared tunnel token secret
+  when: '"not found" in __cloudflared_secret_check.stdout or __cloudflared_secret_check.stdout == ""'
+  ansible.builtin.shell:
+    cmd: >
+      kubectl create secret generic {{ cloudflared_secret_name }}
+      --namespace {{ infrastructure_namespace }}
+      --from-literal=token={{ cloudflared_placeholder_token }}
+      --dry-run=client -o yaml | kubectl apply -f -
+  register: __cloudflared_secret_apply
+  changed_when: '"unchanged" not in __cloudflared_secret_apply.stdout'
+
+- name: Warn about cloudflared tunnel token
+  ansible.builtin.debug:
+    msg:
+      - "Cloudflare tunnel token secret '{{ cloudflared_secret_name }}' created with a placeholder."
+      - "Replace it with your real token:"
+      - "  kubectl delete secret {{ cloudflared_secret_name }} --namespace {{ infrastructure_namespace }}"
+      - "  kubectl create secret generic {{ cloudflared_secret_name }} \\"
+      - "    --namespace {{ infrastructure_namespace }} \\"
+      - "    --from-literal=token=eyJhIjoi..."

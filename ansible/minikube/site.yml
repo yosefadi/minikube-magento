@@ -30,5 +30,7 @@
       tags: [cri-dockerd]
     - role: minikube
       tags: [minikube]
+    - role: infrastructure-secrets
+      tags: [infrastructure-secrets]
     - role: fluxcd
       tags: [fluxcd]

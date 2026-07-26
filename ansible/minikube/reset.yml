@@ -58,3 +58,9 @@
         - /tmp/fluxcd-ssh-key.gitrepository.yaml
         - /tmp/fluxcd-ssh-key.kustomization.yaml
       failed_when: false
+
+    - name: Delete infrastructure namespace and all resources
+      ansible.builtin.command:
+        cmd: kubectl delete namespace infrastructure --ignore-not-found --wait=false
+      changed_when: true
+      failed_when: false
