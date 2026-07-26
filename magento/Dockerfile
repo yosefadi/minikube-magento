@@ -17,7 +17,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         libcurl4-openssl-dev \
     && docker-php-ext-configure gd --with-freetype --with-jpeg \
     && docker-php-ext-install -j"$(nproc)" \
-        bcmath ctype curl dom ftp gd intl mbstring \
+        bcmath ctype curl ftp gd intl mbstring \
         pdo_mysql simplexml soap sockets sodium xsl zip opcache \
     && rm -rf /var/lib/apt/lists/*
 
