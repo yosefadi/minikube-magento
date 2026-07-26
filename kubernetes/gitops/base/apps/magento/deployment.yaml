@@ -70,6 +70,20 @@ spec:
                 secretKeyRef:
                   name: magento-credentials
                   key: dragonfly-password
+          # While this hasn't yet succeeded, kubelet skips liveness AND
+          # readiness entirely — the actual protection against restarting
+          # mid setup:install/setup:upgrade/static-content:deploy on a slow
+          # first boot. Bumping liveness's initialDelaySeconds alone doesn't
+          # do this: it only delays the first check, and liveness still only
+          # tolerates failureThreshold more misses after that once it starts
+          # — nowhere near enough for a multi-minute first-run install.
+          # 60 * 10s = 10 minutes, comfortably covering the dependency waits
+          # (entrypoint.sh's own wait_for_tcp) plus install/static-content.
+          startupProbe:
+            tcpSocket:
+              port: 9000
+            periodSeconds: 10
+            failureThreshold: 60
           livenessProbe:
             tcpSocket:
               port: 9000
@@ -102,6 +116,14 @@ spec:
           ports:
             - containerPort: 8080
               name: http
+          # Same reasoning as php-fpm's startupProbe: nginx's own entrypoint
+          # blocks waiting on php-fpm's fastcgi port before nginx itself
+          # ever starts, so it needs the same generous grace window.
+          startupProbe:
+            tcpSocket:
+              port: 8080
+            periodSeconds: 10
+            failureThreshold: 60
           livenessProbe:
             tcpSocket:
               port: 8080
