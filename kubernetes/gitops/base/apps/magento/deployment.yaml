@@ -16,8 +16,6 @@ spec:
       labels:
         app.kubernetes.io/name: magento
     spec:
-      imagePullSecrets:
-        - name: ghcr-credentials
       initContainers:
         - name: init-app-etc
           image: ghcr.io/yosefadi/minikube-magento/magento:2.4.9-88957dd
