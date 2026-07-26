@@ -36,6 +36,8 @@
         - /var/lib/kubelet
         - /etc/kubernetes
         - /etc/cni/net.d
+        - /tmp/hostpath-provisioner
+        - /tmp/hostpath_pv
 
     - name: Uninstall FluxCD Helm release
       ansible.builtin.command:

@@ -15,6 +15,18 @@
   loop:
     - "{{ minikube_home }}/.minikube"
     - "{{ minikube_home }}/.kube"
+    - /var/lib/minikube/hostpath-provisioner
+    - /var/lib/minikube/hostpath_pv
+
+- name: Symlink hostpath provisioner directories to persistent storage
+  ansible.builtin.file:
+    src: "{{ item.src }}"
+    dest: "{{ item.dest }}"
+    state: link
+    force: true
+  loop:
+    - { src: '/var/lib/minikube/hostpath-provisioner', dest: '/tmp/hostpath-provisioner' }
+    - { src: '/var/lib/minikube/hostpath_pv', dest: '/tmp/hostpath_pv' }
 
 - name: Check the installed minikube version
   ansible.builtin.command: "{{ minikube_bin }} version --short"

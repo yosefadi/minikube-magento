@@ -22,7 +22,7 @@
 
 - name: Generate Magento admin password
   ansible.builtin.set_fact:
-    __magento_admin_password: "{{ lookup('password', '/dev/null chars=ascii_letters,digits length=' ~ magento_admin_password_length | string) }}"
+    __magento_admin_password: "{{ lookup('password', '/dev/null chars=' ~ magento_admin_password_chars ~ ' length=' ~ magento_admin_password_length | string) }}"
 
 - name: Create or update Magento credentials secret
   ansible.builtin.shell:

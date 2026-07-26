@@ -8,6 +8,7 @@ magento_secret_name: magento-credentials
 magento_admin_user: admin
 magento_admin_email: admin@example.com
 magento_admin_password_length: 16
+magento_admin_password_chars: ascii_letters,digits,punctuation
 
 ghcr_secret_name: ghcr-credentials
 ghcr_placeholder_token: CHANGE_ME_CREATE_A_GITHUB_PAT_WITH_READ:PACKAGES_SCOPE
