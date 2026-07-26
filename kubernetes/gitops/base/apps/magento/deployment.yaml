@@ -26,7 +26,7 @@ spec:
         fsGroup: 33
       initContainers:
         - name: init-app-etc
-          image: ghcr.io/yosefadi/minikube-magento/magento-php:2.4.9-7644f95
+          image: ghcr.io/yosefadi/minikube-magento/magento-php:2.4.9-c46b1cb
           imagePullPolicy: IfNotPresent
           command:
             - sh
@@ -41,7 +41,7 @@ spec:
               mountPath: /mnt/app-etc
       containers:
         - name: php-fpm
-          image: ghcr.io/yosefadi/minikube-magento/magento-php:2.4.9-7644f95
+          image: ghcr.io/yosefadi/minikube-magento/magento-php:2.4.9-c46b1cb
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 9000
@@ -97,7 +97,7 @@ spec:
         # pub/static and pub/media PVCs to serve directly, plus a loopback
         # path to php-fpm's fastcgi port for everything else.
         - name: nginx
-          image: ghcr.io/yosefadi/minikube-magento/magento-nginx:2.4.9-7644f95
+          image: ghcr.io/yosefadi/minikube-magento/magento-nginx:2.4.9-c46b1cb
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8080
