@@ -16,11 +16,9 @@ spec:
   # created TLS secret referenced by secretName).
   entryPoints:
     - web
-    - websecure
   routes:
     - kind: Rule
       match: Host(`shop.example.com`)
       services:
         - name: magento
           port: 8080
-  tls: {}

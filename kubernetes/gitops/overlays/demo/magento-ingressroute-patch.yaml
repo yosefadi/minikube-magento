@@ -7,7 +7,6 @@ metadata:
 spec:
   entryPoints:
     - web
-    - websecure
   routes:
     - kind: Rule
       match: Host(`demo-magento.yosefadi.my.id`)
