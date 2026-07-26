@@ -3,6 +3,9 @@ kind: Kustomization
 resources:
   - infrastructure/namespace.yaml
   - infrastructure/helm-repositories/opensearch.yaml
+  - infrastructure/helm-repositories/stakater.yaml
+  - infrastructure/reloader/namespace.yaml
+  - infrastructure/reloader/release.yaml
   - infrastructure/mariadb/statefulset.yaml
   - infrastructure/mariadb/service.yaml
   - infrastructure/opensearch/release.yaml
