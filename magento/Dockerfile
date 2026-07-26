@@ -18,7 +18,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && docker-php-ext-configure gd --with-freetype --with-jpeg \
     && docker-php-ext-install -j"$(nproc)" \
         bcmath ctype curl ftp gd intl mbstring \
-        pdo_mysql simplexml soap sockets sodium xsl zip opcache \
+        pdo_mysql simplexml soap sockets sodium xsl zip \
     && rm -rf /var/lib/apt/lists/*
 
 COPY docker/php.ini /usr/local/etc/php/conf.d/zz-magento.ini
