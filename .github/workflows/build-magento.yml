@@ -8,7 +8,7 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}/magento
+  IMAGE_BASE: ${{ github.repository }}/magento
 
 jobs:
   build:
@@ -27,57 +27,70 @@ jobs:
         run: |
           MAGENTO_VERSION=$(grep '^ARG MAGENTO_VERSION=' magento/Dockerfile | cut -d'=' -f2)
           SHORT_SHA="${GITHUB_SHA::7}"
-
-          TAGS="${REGISTRY}/${IMAGE_NAME}:${MAGENTO_VERSION}-${SHORT_SHA}"
-
-          if [[ "${GITHUB_REF}" == "refs/heads/main" ]]; then
-            TAGS="${TAGS},${REGISTRY}/${IMAGE_NAME}:latest"
-          fi
-
-          if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
-            TAGS="${TAGS},${REGISTRY}/${IMAGE_NAME}:${MAGENTO_VERSION}"
-          fi
-
-          echo "tags=${TAGS}" >> "${GITHUB_OUTPUT}"
           echo "magento_version=${MAGENTO_VERSION}" >> "${GITHUB_OUTPUT}"
+          echo "short_sha=${SHORT_SHA}" >> "${GITHUB_OUTPUT}"
 
       - name: Create Docker config for Kaniko
         run: |
           mkdir -p /tmp/kaniko/.docker
           echo "{\"auths\":{\"ghcr.io\":{\"auth\":\"$(echo -n "${{ github.actor }}:${{ secrets.GITHUB_TOKEN }}" | base64 | tr -d '\n')\"}}}" > /tmp/kaniko/.docker/config.json
 
-      - name: Build and push with Kaniko
+      # php-fpm and nginx are two separate images (see magento/Dockerfile's
+      # final-php / final-nginx targets) so nginx never ships a PHP
+      # interpreter and neither image needs root to run.
+      - name: Build and push php-fpm and nginx images with Kaniko
+        id: build
         shell: bash
         run: |
-          IFS=',' read -ra TAGS_ARRAY <<< "${{ steps.meta.outputs.tags }}"
-          DEST_FLAGS=()
-          for tag in "${TAGS_ARRAY[@]}"; do
-            DEST_FLAGS+=("--destination=${tag}")
+          MAGENTO_VERSION="${{ steps.meta.outputs.magento_version }}"
+          SHORT_SHA="${{ steps.meta.outputs.short_sha }}"
+
+          for component in php nginx; do
+            IMAGE_NAME="${IMAGE_BASE}-${component}"
+            TAGS="${REGISTRY}/${IMAGE_NAME}:${MAGENTO_VERSION}-${SHORT_SHA}"
+
+            if [[ "${GITHUB_REF}" == "refs/heads/main" ]]; then
+              TAGS="${TAGS},${REGISTRY}/${IMAGE_NAME}:latest"
+            fi
+
+            if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
+              TAGS="${TAGS},${REGISTRY}/${IMAGE_NAME}:${MAGENTO_VERSION}"
+            fi
+
+            IFS=',' read -ra TAGS_ARRAY <<< "${TAGS}"
+            DEST_FLAGS=()
+            for tag in "${TAGS_ARRAY[@]}"; do
+              DEST_FLAGS+=("--destination=${tag}")
+            done
+
+            docker run --rm \
+              -v "${GITHUB_WORKSPACE}:/workspace" \
+              -v /tmp/kaniko/.docker/config.json:/kaniko/.docker/config.json:ro \
+              gcr.io/kaniko-project/executor:latest \
+              --context=/workspace/magento \
+              --dockerfile=Dockerfile \
+              --target="final-${component}" \
+              "${DEST_FLAGS[@]}" \
+              --cache=true \
+              "--cache-repo=${REGISTRY}/${IMAGE_NAME}/cache" \
+              --compressed-caching \
+              --verbosity=info
+
+            FIRST_TAG=$(echo "${TAGS}" | cut -d',' -f1)
+            echo "${component}_tag=${FIRST_TAG}" >> "${GITHUB_OUTPUT}"
           done
 
-          docker run --rm \
-            -v "${GITHUB_WORKSPACE}:/workspace" \
-            -v /tmp/kaniko/.docker/config.json:/kaniko/.docker/config.json:ro \
-            gcr.io/kaniko-project/executor:latest \
-            --context=/workspace/magento \
-            --dockerfile=Dockerfile \
-            "${DEST_FLAGS[@]}" \
-            --cache=true \
-            "--cache-repo=${REGISTRY}/${IMAGE_NAME}/cache" \
-            --compressed-caching \
-            --verbosity=info
-
-      - name: Update deployment manifest with new image tag
+      - name: Update deployment manifest with new image tags
         shell: bash
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          FIRST_TAG=$(echo "${{ steps.meta.outputs.tags }}" | cut -d',' -f1)
           DEPLOY_FILE="kubernetes/gitops/base/apps/magento/deployment.yaml"
-          sed -i "s|image: ghcr\.io/.*/magento:.*|image: ${FIRST_TAG}|" "${DEPLOY_FILE}"
+          sed -i "s|image: ghcr\.io/.*/magento-php:.*|image: ${{ steps.build.outputs.php_tag }}|" "${DEPLOY_FILE}"
+          sed -i "s|image: ghcr\.io/.*/magento-nginx:.*|image: ${{ steps.build.outputs.nginx_tag }}|" "${DEPLOY_FILE}"
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git remote set-url origin "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
           git add "${DEPLOY_FILE}"
-          git diff --staged --quiet || git commit -m "chore: update magento image to ${FIRST_TAG}"
+          git diff --staged --quiet || git commit -m "chore: update magento images to ${{ steps.build.outputs.php_tag }} / ${{ steps.build.outputs.nginx_tag }}"
           git push

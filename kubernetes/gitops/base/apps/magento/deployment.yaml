@@ -16,9 +16,17 @@ spec:
       labels:
         app.kubernetes.io/name: magento
     spec:
+      # Both containers run as www-data (33). fsGroup makes the kubelet
+      # chown the mounted PVCs to that group on attach, since a fresh PVC
+      # otherwise mounts root-owned and neither container could write to it.
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 33
+        runAsGroup: 33
+        fsGroup: 33
       initContainers:
         - name: init-app-etc
-          image: ghcr.io/yosefadi/minikube-magento/magento:2.4.9-88957dd
+          image: ghcr.io/yosefadi/minikube-magento/magento-php:2.4.9-88957dd
           imagePullPolicy: IfNotPresent
           command:
             - sh
@@ -32,12 +40,12 @@ spec:
             - name: app-etc
               mountPath: /mnt/app-etc
       containers:
-        - name: magento
-          image: ghcr.io/yosefadi/minikube-magento/magento:2.4.9-88957dd
+        - name: php-fpm
+          image: ghcr.io/yosefadi/minikube-magento/magento-php:2.4.9-88957dd
           imagePullPolicy: IfNotPresent
           ports:
-            - containerPort: 8080
-              name: http
+            - containerPort: 9000
+              name: fastcgi
           envFrom:
             - configMapRef:
                 name: magento-config
@@ -59,6 +67,38 @@ spec:
                   key: admin-user
           livenessProbe:
             tcpSocket:
+              port: 9000
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          readinessProbe:
+            tcpSocket:
+              port: 9000
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 150m
+              memory: 224Mi
+            limits:
+              memory: 448Mi
+          volumeMounts:
+            - name: app-etc
+              mountPath: /var/www/html/app/etc
+            - name: pub-static
+              mountPath: /var/www/html/pub/static
+            - name: pub-media
+              mountPath: /var/www/html/pub/media
+        # nginx never sees the DB/admin secrets — it only needs the same
+        # pub/static and pub/media PVCs to serve directly, plus a loopback
+        # path to php-fpm's fastcgi port for everything else.
+        - name: nginx
+          image: ghcr.io/yosefadi/minikube-magento/magento-nginx:2.4.9-88957dd
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8080
+              name: http
+          livenessProbe:
+            tcpSocket:
               port: 8080
             initialDelaySeconds: 30
             periodSeconds: 10
@@ -69,13 +109,11 @@ spec:
             periodSeconds: 10
           resources:
             requests:
-              cpu: 200m
-              memory: 256Mi
+              cpu: 50m
+              memory: 32Mi
             limits:
-              memory: 512Mi
+              memory: 64Mi
           volumeMounts:
-            - name: app-etc
-              mountPath: /var/www/html/app/etc
             - name: pub-static
               mountPath: /var/www/html/pub/static
             - name: pub-media

@@ -1,8 +1,11 @@
 # Magento Open Source — application image
 
-Builds a single, self-contained Magento 2 image (nginx + PHP-FPM via
-`supervisord`) meant to run as-is against an already-provisioned MySQL and
-OpenSearch. `composer install` and `setup:di:compile` happen at build
+Builds two images from one `Dockerfile` — `final-php` (PHP-FPM, owns the
+whole install/upgrade lifecycle) and `final-nginx` (nginx only, no PHP
+interpreter) — meant to run as two containers sharing a network namespace
+(one Kubernetes pod, or `network_mode: service:` in compose) against an
+already-provisioned MySQL and OpenSearch. Both run as `www-data`, never
+root. `composer install` and `setup:di:compile` happen at build
 time — verified neither needs a database. `setup:static-content:deploy`
 does **not** bake in, even though it doesn't touch application data: tried it
 at build time and it fails with `The default website isn't defined`, because
@@ -25,22 +28,28 @@ necessary for Adobe Commerce, or for installing certain paid extensions.
 ## Build
 
 ```bash
-docker build -t magento-app:2.4.9 .
+docker build --target final-php   -t magento-php:2.4.9   .
+docker build --target final-nginx -t magento-nginx:2.4.9 .
 
 # pin a different release, PHP version, or bake in sample data:
 docker build \
   --build-arg MAGENTO_VERSION=2.4.9 \
   --build-arg PHP_VERSION=8.3 \
   --build-arg INSTALL_SAMPLE_DATA=true \
-  -t magento-app:2.4.9 .
+  --target final-php -t magento-php:2.4.9 .
 ```
 
 ## Run
 
-The entrypoint (`docker/entrypoint.sh`) waits for MySQL and OpenSearch on
-their TCP ports, then handles two things independently (they're typically
-two separate persistent volumes, so either can be present or missing on any
-given start):
+Both containers need to share a network namespace — nginx proxies PHP
+requests to `127.0.0.1:9000`, not a service name (see `docker-compose.yml`'s
+`network_mode: service:magento-php`, or the two containers in one pod under
+`kubernetes/gitops/base/apps/magento/deployment.yaml`).
+
+The php-fpm entrypoint (`docker/entrypoint.sh`) waits for MySQL and
+OpenSearch on their TCP ports, then handles two things independently
+(they're typically two separate persistent volumes, so either can be
+present or missing on any given start):
 
 - `app/etc/env.php` missing → full `setup:install` (creates the DB schema,
   default website/store, and admin user); present → `setup:upgrade` instead

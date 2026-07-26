@@ -106,12 +106,4 @@ fi
 
 bin/magento cache:flush
 
-# Everything above ran as root, and setup:install/setup:upgrade/
-# static-content:deploy all create fresh files under var/, generated/, and
-# pub/ as they go — those end up root-owned despite the build-time chown,
-# and php-fpm's workers run as www-data. Verified live: without this,
-# php-fpm can't write session files or var/log/system.log and every request
-# 500s with "Permission denied".
-chown -R www-data:www-data var generated pub app/etc
-
 exec "$@"

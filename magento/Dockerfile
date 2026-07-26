@@ -63,25 +63,48 @@ RUN bin/magento module:enable --all \
     && bin/magento setup:di:compile
 
 # ---------------------------------------------------------------------------
-# final: nginx + php-fpm runtime, nothing PHP-CLI-build-only left behind.
+# final-php: php-fpm only. Owns the entire install/upgrade lifecycle (needs
+# DB + OpenSearch access and the PHP CLI) and runs as www-data throughout —
+# no root step ever runs in this container, so nothing needs a chown fixup.
 # ---------------------------------------------------------------------------
-FROM base AS final
-
-RUN apt-get update && apt-get install -y --no-install-recommends \
-        nginx supervisor \
-    && rm -rf /var/lib/apt/lists/*
+FROM base AS final-php
 
 WORKDIR /var/www/html
 COPY --from=builder --chown=www-data:www-data /var/www/html /var/www/html
 
-COPY docker/nginx.conf /etc/nginx/nginx.conf
-COPY docker/nginx-site.conf /etc/nginx/sites-enabled/default
-COPY docker/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 COPY docker/entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod +x /usr/local/bin/entrypoint.sh \
     && mkdir -p var generated pub/media pub/static \
     && chown -R www-data:www-data var generated pub app/etc
 
-EXPOSE 8080
+USER www-data
+EXPOSE 9000
 ENTRYPOINT ["entrypoint.sh"]
-CMD ["supervisord", "-n", "-c", "/etc/supervisor/conf.d/supervisord.conf"]
+CMD ["php-fpm", "--nodaemonize"]
+
+# ---------------------------------------------------------------------------
+# final-nginx: static/proxy only, no PHP interpreter in this image at all.
+# Needs its own copy of the codebase (not just pub/static and pub/media)
+# because nginx.conf.sample does on-disk existence checks — e.g. the PHP
+# entry-point location does `try_files $uri =404;` against index.php/get.php/
+# static.php before it will even proxy to php-fpm — so those files must be
+# physically present here, not only on the php-fpm side.
+# ---------------------------------------------------------------------------
+FROM nginx:1-trixie AS final-nginx
+
+WORKDIR /var/www/html
+COPY --from=builder --chown=www-data:www-data /var/www/html /var/www/html
+
+# The stock image's own conf.d/default.conf listens on port 80 — harmless
+# as root, but our nginx.conf includes conf.d/*.conf too, and a non-root
+# process can't bind a privileged port, so it must go.
+RUN rm -f /etc/nginx/conf.d/default.conf
+COPY docker/nginx.conf /etc/nginx/nginx.conf
+COPY docker/nginx-site.conf /etc/nginx/sites-enabled/default
+COPY docker/nginx-entrypoint.sh /usr/local/bin/nginx-entrypoint.sh
+RUN chmod +x /usr/local/bin/nginx-entrypoint.sh
+
+USER www-data
+EXPOSE 8080
+ENTRYPOINT ["nginx-entrypoint.sh"]
+CMD ["nginx", "-g", "daemon off;"]

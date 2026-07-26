@@ -8,11 +8,6 @@ services:
       MARIADB_PASSWORD: ${MARIADB_PASSWORD}
     volumes:
       - mariadb-data:/var/lib/mysql
-    healthcheck:
-      test: ["CMD-SHELL", "mariadb-admin ping -h localhost -u root -p'${MARIADB_ROOT_PASSWORD}'"]
-      interval: 5s
-      timeout: 5s
-      retries: 20
 
   opensearch:
     image: opensearchproject/opensearch:2
@@ -25,19 +20,32 @@ services:
       OPENSEARCH_JAVA_OPTS: "-Xms512m -Xmx512m"
     volumes:
       - opensearch-data:/usr/share/opensearch/data
-    healthcheck:
-      test: ["CMD-SHELL", "curl -sf http://localhost:9200/_cluster/health || exit 1"]
-      interval: 5s
-      timeout: 5s
-      retries: 20
 
-  magento:
-    build: .
+  # magento-php and magento-nginx run as www-data, not root — mirroring
+  # production where the pod's securityContext.fsGroup does this instead.
+  # Docker/podman named volumes start out root-owned on first use, and
+  # there's no fsGroup equivalent in plain compose, so this runs once to
+  # hand the mountpoints to www-data (uid/gid 33) before either container
+  # tries to write into them.
+  volume-init:
+    image: busybox
+    command: ["chown", "-R", "33:33", "/var/www/html/app/etc", "/var/www/html/pub/media", "/var/www/html/pub/static"]
+    volumes:
+      - magento-etc:/var/www/html/app/etc
+      - magento-media:/var/www/html/pub/media
+      - magento-static:/var/www/html/pub/static
+
+  magento-php:
+    build:
+      context: .
+      target: final-php
     depends_on:
+      volume-init:
+        condition: service_completed_successfully
       mariadb:
-        condition: service_healthy
+        condition: service_started
       opensearch:
-        condition: service_healthy
+        condition: service_started
     environment:
       MAGENTO_BASE_URL: http://localhost:8080/
       MAGENTO_DB_HOST: mariadb
@@ -47,6 +55,10 @@ services:
       MAGENTO_OPENSEARCH_HOST: opensearch
       MAGENTO_ADMIN_EMAIL: admin@example.com
       MAGENTO_ADMIN_PASSWORD: ${MAGENTO_ADMIN_PASSWORD}
+    # nginx joins this service's network namespace below (mirroring how
+    # they'll share a network namespace as two containers in one k8s pod),
+    # so the host port mapping lives here even though nginx is what's
+    # actually listening on 8080.
     ports:
       - "8080:8080"
     volumes:
@@ -58,6 +70,19 @@ services:
       # Without this, static content gets redeployed on every restart —
       # harmless but slow (the entrypoint checks for it independently of
       # env.php, since they're separate volumes and either can be missing).
+      - magento-static:/var/www/html/pub/static
+
+  magento-nginx:
+    build:
+      context: .
+      target: final-nginx
+    depends_on:
+      - magento-php
+    # Same network namespace as magento-php — nginx proxies to php-fpm over
+    # 127.0.0.1:9000, exactly like two containers sharing one k8s pod.
+    network_mode: "service:magento-php"
+    volumes:
+      - magento-media:/var/www/html/pub/media
       - magento-static:/var/www/html/pub/static
 
 volumes:
