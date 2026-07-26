@@ -77,13 +77,20 @@ spec:
           # do this: it only delays the first check, and liveness still only
           # tolerates failureThreshold more misses after that once it starts
           # — nowhere near enough for a multi-minute first-run install.
-          # 60 * 10s = 10 minutes, comfortably covering the dependency waits
-          # (entrypoint.sh's own wait_for_tcp) plus install/static-content.
+          # 180 * 10s = 30 minutes. A 10-minute budget was tried first and
+          # measured too tight on a resource-constrained host — worse, when
+          # it fires it's actively counterproductive: killing php-fpm mid
+          # setup:install/static-content:deploy also forces nginx to restart
+          # (still waiting on this port), and the restarted php-fpm has to
+          # redo its *entire* entrypoint from scratch, making the next
+          # attempt less likely to finish in time, not more. Being
+          # over-generous here has ~no downside — if the app is genuinely
+          # hung, waiting longer to notice costs nothing on a first boot.
           startupProbe:
             tcpSocket:
               port: 9000
             periodSeconds: 10
-            failureThreshold: 60
+            failureThreshold: 180
           livenessProbe:
             tcpSocket:
               port: 9000
@@ -123,7 +130,7 @@ spec:
             tcpSocket:
               port: 8080
             periodSeconds: 10
-            failureThreshold: 60
+            failureThreshold: 180
           livenessProbe:
             tcpSocket:
               port: 8080

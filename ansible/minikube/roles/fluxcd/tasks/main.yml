@@ -162,7 +162,7 @@
     cmd: >
       kubectl wait --for=condition=ready kustomization/{{ fluxcd_release_name }}
       --namespace {{ fluxcd_namespace }}
-      --timeout=300s
+      --timeout=1800s
   changed_when: false
 
 - name: Display FluxCD installation summary

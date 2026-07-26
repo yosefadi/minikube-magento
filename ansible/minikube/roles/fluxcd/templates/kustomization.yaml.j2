@@ -9,6 +9,14 @@ spec:
     - name: {{ fluxcd_storage_release_name }}
     - name: {{ fluxcd_traefik_release_name }}
   interval: 5m
+  # Magento's own first-boot (setup:install/setup:upgrade/static-content:deploy)
+  # can take up to the 30-minute budget the Deployment's startupProbe now
+  # allows for — this timeout has to be at least that long, or Flux gives up
+  # and reports the Kustomization unhealthy while the pod is still legitimately
+  # progressing (confirmed live: the previous unset value, which falls back to
+  # the interval above, failed the health check well before a slow first boot
+  # finished).
+  timeout: 30m
   path: {{ fluxcd_git_path }}
   prune: true
   wait: true
