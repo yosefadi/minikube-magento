@@ -23,9 +23,17 @@ spec:
           enabled: false
         zfs:
           enabled: false
+        rawfile:
+          enabled: false
+        hostpath:
+          enabled: true
       replicated:
         mayastor:
           enabled: false
     localpv:
       hostpath:
         basePath: /var/openebs/local
+    loki:
+      enabled: false
+    alloy:
+      enabled: false
