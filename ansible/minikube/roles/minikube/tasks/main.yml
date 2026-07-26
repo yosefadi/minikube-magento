@@ -195,6 +195,24 @@
     and (minikube_addons_state.stdout | from_json)['storage-provisioner'].Status == 'enabled'
   changed_when: true
 
+- name: Disable minikube's default-storageclass addon
+  ansible.builtin.command: "{{ minikube_bin }} addons disable default-storageclass"
+  environment:
+    MINIKUBE_IN_STYLE: "false"
+  when: >-
+    'default-storageclass' in (minikube_addons_state.stdout | from_json)
+    and (minikube_addons_state.stdout | from_json)['default-storageclass'].Status == 'enabled'
+  changed_when: true
+
+- name: Set OpenEBS hostpath as the default StorageClass
+  ansible.builtin.shell:
+    cmd: >
+      kubectl annotate storageclass openebs-hostpath
+      storageclass.kubernetes.io/is-default-class=true
+      --overwrite
+  changed_when: true
+  failed_when: false
+
 - name: Read the minikube kubeconfig
   ansible.builtin.slurp:
     src: "{{ minikube_home }}/.kube/config"
