@@ -10,16 +10,15 @@
       kubectl get secret {{ mariadb_secret_name }}
       --namespace {{ mariadb_namespace }}
       -o json
-      | python3 -c "import sys,json; s=json.load(sys.stdin); print({k: __import__('base64').b64decode(v).decode() for k,v in s['data'].items()})"
-  register: __mariadb_secret_data
+  register: __mariadb_secret_json
   changed_when: false
 
-- name: Parse MariaDB credentials
+- name: Decode MariaDB credentials
   ansible.builtin.set_fact:
-    __mariadb_root_password: "{{ (__mariadb_secret_data.stdout | from_json)['root-password'] }}"
-    __mariadb_user: "{{ (__mariadb_secret_data.stdout | from_json)['magento-user'] }}"
-    __mariadb_database: "{{ (__mariadb_secret_data.stdout | from_json)['magento-database'] }}"
-    __mariadb_password: "{{ (__mariadb_secret_data.stdout | from_json)['magento-password'] }}"
+    __mariadb_root_password: "{{ (__mariadb_secret_json.stdout | from_json).data['root-password'] | b64decode }}"
+    __mariadb_user: "{{ (__mariadb_secret_json.stdout | from_json).data['magento-user'] | b64decode }}"
+    __mariadb_database: "{{ (__mariadb_secret_json.stdout | from_json).data['magento-database'] | b64decode }}"
+    __mariadb_password: "{{ (__mariadb_secret_json.stdout | from_json).data['magento-password'] | b64decode }}"
 
 - name: Generate Magento admin password
   ansible.builtin.set_fact:
