@@ -55,6 +55,9 @@ services:
       MAGENTO_OPENSEARCH_HOST: opensearch
       MAGENTO_ADMIN_EMAIL: admin@example.com
       MAGENTO_ADMIN_PASSWORD: ${MAGENTO_ADMIN_PASSWORD}
+      # Matches the k8s configmap's non-default admin path — see
+      # kubernetes/gitops/base/apps/magento/configmap.yaml.
+      MAGENTO_BACKEND_FRONTNAME: panel
     # nginx joins this service's network namespace below (mirroring how
     # they'll share a network namespace as two containers in one k8s pod),
     # so the host port mapping lives here even though nginx is what's
