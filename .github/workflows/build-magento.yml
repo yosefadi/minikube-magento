@@ -73,7 +73,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           FIRST_TAG=$(echo "${{ steps.meta.outputs.tags }}" | cut -d',' -f1)
-          DEPLOY_FILE="kubernetes/gitops/apps/magento/deployment.yaml"
+          DEPLOY_FILE="kubernetes/gitops/base/apps/magento/deployment.yaml"
           sed -i "s|image: ghcr\.io/.*/magento:.*|image: ${FIRST_TAG}|" "${DEPLOY_FILE}"
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
