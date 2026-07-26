@@ -24,6 +24,8 @@
       tags: [helm]
     - role: k9s
       tags: [k9s]
+    - role: flux-cli
+      tags: [flux-cli]
     - role: docker
       tags: [docker]
     - role: cri-dockerd

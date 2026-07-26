@@ -1,0 +1,7 @@
+---
+flux_cli_install: true
+
+# "latest" resolves via the GitHub API, or pin a tag such as "v2.9.3".
+flux_cli_version: latest
+
+flux_cli_bin_dir: /usr/local/bin
