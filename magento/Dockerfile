@@ -1,19 +1,19 @@
 # syntax=docker/dockerfile:1
-ARG PHP_VERSION=8.3
+ARG PHP_VERSION=8.5
 ARG MAGENTO_VERSION=2.4.9
 
 # ---------------------------------------------------------------------------
 # base: PHP + every extension Magento's composer.json requires, shared by
 # both the builder and final stages so extensions are only compiled once.
 # ---------------------------------------------------------------------------
-FROM php:${PHP_VERSION}-fpm-bookworm AS base
+FROM php:${PHP_VERSION}-fpm-trixie AS base
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
         git unzip zip curl \
         mariadb-client \
         libzip-dev libicu-dev libxslt1-dev libonig-dev libxml2-dev \
-        libfreetype6-dev libjpeg62-turbo-dev libpng-dev libsodium-dev \
+        libfreetype-dev libjpeg62-turbo-dev libpng-dev libsodium-dev \
         libcurl4-openssl-dev \
     && docker-php-ext-configure gd --with-freetype --with-jpeg \
     && docker-php-ext-install -j"$(nproc)" \
