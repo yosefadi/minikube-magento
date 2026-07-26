@@ -8,3 +8,4 @@ __pycache__/
 venv/
 *.retry
 output/
+ssh/
