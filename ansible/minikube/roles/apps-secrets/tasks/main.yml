@@ -33,9 +33,35 @@
   ansible.builtin.set_fact:
     __dragonfly_password: "{{ (__dragonfly_secret_json.stdout | from_json).data['password'] | b64decode }}"
 
-- name: Generate Magento admin password
+- name: Check if Magento credentials secret already exists
+  ansible.builtin.shell:
+    cmd: kubectl get secret {{ magento_secret_name }} --namespace {{ apps_namespace }} -o json 2>/dev/null || true
+  register: __magento_secret_check
+  changed_when: false
+
+# Same reasoning as MariaDB's password reuse above: regenerating this on
+# every run would desync the secret from whatever's actually stored in
+# Magento's admin_user table (set once, at setup:install time, from
+# whichever value the secret held then) — rerunning this role for an
+# unrelated reason (e.g. adding Dragonfly) shouldn't quietly lock out the
+# admin login.
+#
+# The last two characters are drawn from fixed classes (lowercase, digit)
+# rather than the full mixed charset above, because Magento's own admin
+# password policy requires both an alphabetic and a numeric character —
+# a pure random draw from ascii_letters,digits,punctuation has no such
+# guarantee and can (and did) produce a password Magento's own
+# setup:install/admin-password validators reject outright.
+- name: Generate Magento admin password (first run only)
+  when: __magento_secret_check.stdout == ""
   ansible.builtin.set_fact:
-    __magento_admin_password: "{{ lookup('password', '/dev/null chars=' ~ magento_admin_password_chars ~ ' length=' ~ magento_admin_password_length | string) }}"
+    __magento_admin_password: >-
+      {{ lookup('password', '/dev/null chars=' ~ magento_admin_password_chars ~ ' length=' ~ (magento_admin_password_length - 2) | string) }}{{ lookup('password', '/dev/null chars=ascii_lowercase length=1') }}{{ lookup('password', '/dev/null chars=digits length=1') }}
+
+- name: Reuse existing Magento admin password
+  when: __magento_secret_check.stdout != ""
+  ansible.builtin.set_fact:
+    __magento_admin_password: "{{ (__magento_secret_check.stdout | from_json).data['admin-password'] | b64decode }}"
 
 - name: Create or update Magento credentials secret
   ansible.builtin.shell:

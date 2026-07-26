@@ -27,7 +27,7 @@ services:
     # per-container limit, and wants ~256MiB of maxmemory per thread —
     # verified live that leaving this unset demands several GiB on a
     # many-core dev machine and refuses to start.
-    command: ["--requirepass=${DRAGONFLY_PASSWORD}", "--proactor_threads=1", "--maxmemory=256mb", "--dbfilename="]
+    command: ["--requirepass=${DRAGONFLY_PASSWORD}", "--proactor_threads=1", "--maxmemory=256mb"]
     user: "1000:1000"
 
   # magento-php and magento-nginx run as www-data, not root — mirroring

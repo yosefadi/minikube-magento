@@ -31,8 +31,6 @@ spec:
             # match the resources below.
             - --proactor_threads=1
             - --maxmemory=256mb
-            # Pure cache: no volume mounted, so nothing to snapshot to.
-            - --dbfilename=""
           ports:
             - containerPort: 6379
               name: redis
