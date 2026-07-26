@@ -36,3 +36,25 @@
         - /var/lib/kubelet
         - /etc/kubernetes
         - /etc/cni/net.d
+
+    - name: Uninstall FluxCD Helm release
+      ansible.builtin.command:
+        cmd: helm uninstall flux --namespace flux-system --ignore-not-found
+      changed_when: true
+      failed_when: false
+
+    - name: Delete FluxCD namespace
+      ansible.builtin.command:
+        cmd: kubectl delete namespace flux-system --ignore-not-found --wait=false
+      changed_when: true
+      failed_when: false
+
+    - name: Remove temporary FluxCD files from target
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - /tmp/fluxcd-ssh-key
+        - /tmp/fluxcd-ssh-key.gitrepository.yaml
+        - /tmp/fluxcd-ssh-key.kustomization.yaml
+      failed_when: false

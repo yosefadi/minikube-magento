@@ -21,7 +21,6 @@ minikube_enable_limited_swap: true
 minikube_addons:
   - default-storageclass
   - storage-provisioner
-  - ingress
   - metrics-server
 
 # Enabled deliberately on both — for demo, this is config-only until a

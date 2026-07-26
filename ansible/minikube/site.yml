@@ -30,3 +30,5 @@
       tags: [cri-dockerd]
     - role: minikube
       tags: [minikube]
+    - role: fluxcd
+      tags: [fluxcd]

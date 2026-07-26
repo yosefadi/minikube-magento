@@ -1,0 +1,136 @@
+---
+- name: Add FluxCD Helm repository
+  ansible.builtin.command:
+    cmd: helm repo add fluxcd {{ fluxcd_helm_repo }}
+  changed_when: false
+
+- name: Update Helm repositories
+  ansible.builtin.command:
+    cmd: helm repo update
+  changed_when: false
+
+- name: Render FluxCD Helm values
+  ansible.builtin.template:
+    src: values.yaml.j2
+    dest: /tmp/fluxcd-values.yaml
+    mode: "0644"
+
+- name: Check if FluxCD Helm release already exists
+  ansible.builtin.shell:
+    cmd: helm status {{ fluxcd_release_name }} --namespace {{ fluxcd_namespace }} 2>&1 || true
+  register: __fluxcd_helm_status
+  changed_when: false
+
+- name: Deploy FluxCD with Helm
+  when: '"not found" in __fluxcd_helm_status.stdout'
+  block:
+    - name: Render FluxCD Helm values
+      ansible.builtin.template:
+        src: values.yaml.j2
+        dest: /tmp/fluxcd-values.yaml
+        mode: "0644"
+
+    - name: Install FluxCD via Helm
+      ansible.builtin.command:
+        cmd: >
+          helm upgrade --install {{ fluxcd_release_name }}
+          fluxcd/{{ fluxcd_chart_name }}
+          --namespace {{ fluxcd_namespace }}
+          --create-namespace
+          --version {{ fluxcd_chart_version }}
+          --values /tmp/fluxcd-values.yaml
+          --wait
+
+- name: Wait for FluxCD pods to be ready
+  ansible.builtin.command:
+    cmd: >
+      kubectl wait --for=condition=ready pod
+      --selector='app in (source-controller, kustomize-controller, helm-controller)'
+      --namespace {{ fluxcd_namespace }}
+      --timeout=180s
+  changed_when: false
+
+- name: Read SSH private key from controller
+  ansible.builtin.slurp:
+    src: "{{ fluxcd_ssh_key_path }}"
+  register: __fluxcd_ssh_key
+  delegate_to: localhost
+  become: false
+
+- name: Copy SSH key to target VM for secret creation
+  ansible.builtin.copy:
+    content: "{{ __fluxcd_ssh_key.content | b64decode }}"
+    dest: "{{ fluxcd_ssh_key_remote }}"
+    mode: "0600"
+
+- name: Fetch GitHub known_hosts from target
+  ansible.builtin.command:
+    cmd: ssh-keyscan github.com 2>/dev/null || true
+  register: __fluxcd_known_hosts
+  changed_when: false
+
+- name: Create or update the FluxCD Git SSH secret
+  ansible.builtin.shell:
+    cmd: >
+      kubectl create secret generic {{ fluxcd_release_name }}
+      --namespace {{ fluxcd_namespace }}
+      --from-file=identity={{ fluxcd_ssh_key_remote }}
+      --from-literal=known_hosts='{{ __fluxcd_known_hosts.stdout }}'
+      --dry-run=client -o yaml | kubectl apply -f -
+  register: __fluxcd_secret_apply
+  changed_when: '"unchanged" not in __fluxcd_secret_apply.stdout'
+
+- name: Remove temporary SSH key file from target
+  ansible.builtin.file:
+    path: "{{ fluxcd_ssh_key_remote }}"
+    state: absent
+
+- name: Render and apply GitRepository CRD
+  ansible.builtin.template:
+    src: gitrepository.yaml.j2
+    dest: /tmp/fluxcd-gitrepository.yaml
+    mode: "0644"
+
+- name: Apply GitRepository CRD
+  ansible.builtin.command:
+    cmd: kubectl apply -f /tmp/fluxcd-gitrepository.yaml
+  register: __fluxcd_gitrepo_apply
+  changed_when: '"unchanged" not in __fluxcd_gitrepo_apply.stdout'
+
+- name: Render and apply Kustomization CRD
+  ansible.builtin.template:
+    src: kustomization.yaml.j2
+    dest: /tmp/fluxcd-kustomization.yaml
+    mode: "0644"
+
+- name: Apply Kustomization CRD
+  ansible.builtin.command:
+    cmd: kubectl apply -f /tmp/fluxcd-kustomization.yaml
+  register: __fluxcd_kustomize_apply
+  changed_when: '"unchanged" not in __fluxcd_kustomize_apply.stdout'
+
+- name: Wait for GitRepository to be ready
+  ansible.builtin.command:
+    cmd: >
+      kubectl wait --for=condition=ready gitrepository/{{ fluxcd_release_name }}
+      --namespace {{ fluxcd_namespace }}
+      --timeout=120s
+  changed_when: false
+
+- name: Wait for Kustomization to be ready
+  ansible.builtin.command:
+    cmd: >
+      kubectl wait --for=condition=ready kustomization/{{ fluxcd_release_name }}
+      --namespace {{ fluxcd_namespace }}
+      --timeout=120s
+  changed_when: false
+
+- name: Display FluxCD installation summary
+  ansible.builtin.debug:
+    msg: |-
+      FluxCD installed successfully!
+      Repository: {{ fluxcd_git_url }}
+      Branch: {{ fluxcd_git_branch }}
+      Path: {{ fluxcd_git_path }}
+      Namespace: {{ fluxcd_namespace }}
+      Check status with: kubectl get gitrepository,kustomization -n {{ fluxcd_namespace }}
