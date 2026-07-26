@@ -6,6 +6,17 @@ on:
     tags: ['v*']
     paths: ['magento/**', '.github/workflows/**']
 
+# Serializes runs of this workflow so two overlapping builds can't race each
+# other on the final git push (see the retry loop below, which handles the
+# other half of this — a concurrent push from *outside* this workflow, e.g.
+# a manual push, which a concurrency group can't prevent since it only
+# queues workflow-triggered runs against each other). cancel-in-progress
+# stays false: a queued run should wait, not cancel an in-flight image
+# build+push over a newer commit landing.
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
 env:
   REGISTRY: ghcr.io
   IMAGE_BASE: ${{ github.repository }}/magento
@@ -91,6 +102,46 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git remote set-url origin "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+
+          if git diff --quiet -- "${DEPLOY_FILE}"; then
+            echo "No image tag changes to commit."
+            exit 0
+          fi
+
           git add "${DEPLOY_FILE}"
-          git diff --staged --quiet || git commit -m "chore: update magento images to ${{ steps.build.outputs.php_tag }} / ${{ steps.build.outputs.nginx_tag }}"
-          git push
+          git commit -m "chore: update magento images to ${{ steps.build.outputs.php_tag }} / ${{ steps.build.outputs.nginx_tag }}"
+
+          # main moves during a build often enough that a bare `git push`
+          # here gets rejected outright as non-fast-forward — confirmed
+          # live (a manual push landed while a build was running). Rebase
+          # onto whatever's actually on the remote and retry instead of
+          # failing the whole workflow over a push race. The concurrency
+          # group above only serializes runs of *this* workflow against
+          # each other; it can't stop an unrelated manual push, which is
+          # what this loop is actually for.
+          # actions/checkout@v4 defaults to a shallow clone (fetch-depth: 1),
+          # which can leave the rebase below without a usable merge-base.
+          # Unshallow once, up front, rather than inside the retry loop.
+          git fetch --unshallow origin main 2>/dev/null || git fetch origin main
+
+          pushed=false
+          for attempt in 1 2 3 4 5; do
+            git fetch origin main
+            if ! git rebase origin/main; then
+              git rebase --abort
+              echo "::error::Rebase conflict updating ${DEPLOY_FILE} onto origin/main — needs manual resolution."
+              exit 1
+            fi
+            if git push origin HEAD:main; then
+              echo "Pushed on attempt ${attempt}."
+              pushed=true
+              break
+            fi
+            echo "Push attempt ${attempt} failed, retrying..."
+            sleep $((RANDOM % 10 + 5))
+          done
+
+          if [ "$pushed" != "true" ]; then
+            echo "::error::Failed to push ${DEPLOY_FILE} update after 5 attempts."
+            exit 1
+          fi
