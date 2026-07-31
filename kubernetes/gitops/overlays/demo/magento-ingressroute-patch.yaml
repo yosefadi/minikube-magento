@@ -9,7 +9,7 @@ spec:
     - web
   routes:
     - kind: Rule
-      match: Host(`testing-magento.yosefadi.my.id`)
+      match: Host(`demo-magento.yosefadi.my.id`)
       services:
         - name: magento
           port: 8080
